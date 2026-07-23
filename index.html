@@ -49,7 +49,7 @@
                     </div>
                 </div>
                 
-                <!-- SAP UPDATE & ACTION BUTTONS -->
+                <!-- ACTION BUTTONS -->
                 <div class="flex items-center space-x-2">
                     <button id="authorize_button" onclick="handleAuthClick()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition">
                         🔑 Sign In to Google Drive
@@ -264,12 +264,67 @@
         }
 
         localStorage.setItem('pmhbl_pass', newPass.trim());
-        alert("✅ Password successfully updated! Use your new password next time you log in.");
+        alert("✅ Password successfully updated!");
     }
 
-    // --- 2. GOOGLE DRIVE SYNC ENGINE ---
+    // --- 2. DATE PARSER & FORMATTER (Converts Excel Serials to DD/MM/YYYY) ---
+    function parseSapDate(val) {
+        if (!val || val === '-' || val === 'Pending') return null;
+
+        let d = null;
+        
+        // Handle Excel Serial Numbers (e.g. 44125)
+        if (typeof val === 'number' || (!isNaN(val) && !isNaN(parseFloat(val)) && !val.toString().includes('-') && !val.toString().includes('/'))) {
+            const serial = parseFloat(val);
+            if (serial > 20000 && serial < 60000) { 
+                d = new Date(Math.round((serial - 25569) * 86400 * 1000));
+            }
+        }
+
+        // Handle Date Object
+        if (!d && val instanceof Date) {
+            d = val;
+        }
+
+        // Handle Strings
+        if (!d && typeof val === 'string') {
+            let s = val.trim();
+            if (s.includes('T')) s = s.split('T')[0];
+
+            if (s.includes('.') || s.includes('/')) {
+                const parts = s.split(/[\.\/]/);
+                if (parts.length === 3) {
+                    if (parts[0].length === 4) {
+                        d = new Date(parts[0], parts[1] - 1, parts[2]);
+                    } else if (parts[2].length === 4) {
+                        d = new Date(parts[2], parts[1] - 1, parts[0]);
+                    }
+                }
+            }
+            if (!d || isNaN(d.getTime())) {
+                d = new Date(s);
+            }
+        }
+
+        if (d && !isNaN(d.getTime())) {
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            return `${day}/${month}/${year}`;
+        }
+
+        return val.toString();
+    }
+
+    function getYearFromDate(dateStr) {
+        const formatted = parseSapDate(dateStr);
+        if (!formatted || formatted === '-') return '';
+        const parts = formatted.split('/');
+        return parts.length === 3 ? parts[2] : '';
+    }
+
+    // --- 3. GOOGLE DRIVE SYNC ENGINE ---
     const CLIENT_ID = '649866247792-copqg0ntuau4lpj742u7bq3ujdpfmb40.apps.googleusercontent.com';
-    const API_KEY = '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';
     const FILE_ID = '1SKWW9Rp7YcJkT6cJ6tnmADdt7OEnYYNQ';
     const SCOPES = 'https://www.googleapis.com/auth/drive';
     let tokenClient;
@@ -378,7 +433,7 @@
         }
     }
 
-    // --- 3. DASHBOARD DATA & FILTER LOGIC ---
+    // --- 4. DASHBOARD DATA & FILTER LOGIC ---
     let database = new Map();
     let filteredData = [];
     let stationChartObj = null;
@@ -411,14 +466,17 @@
 
             rows.forEach(row => {
                 const orderNo = strVal(row['Order']);
-                const compDate = parseSapDate(row['Completion date']);
-                const schedDate = parseSapDate(row['Scheduled start date'] || row['Planned date']);
+                const rawCompDate = row['Completion date'];
+                const rawSchedDate = row['Scheduled start date'] || row['Planned date'];
+
+                const compDate = parseSapDate(rawCompDate);
+                const schedDate = parseSapDate(rawSchedDate);
                 
                 if (!orderNo) return;
 
                 if (database.has(orderNo)) {
                     let existing = database.get(orderNo);
-                    if (!existing.actualDoneDate && compDate) {
+                    if ((!existing.actualDoneDate || existing.actualDoneDate === 'Pending') && compDate) {
                         existing.actualDoneDate = compDate;
                         existing.status = 'COMPLETED';
                         updatedCount++;
@@ -445,14 +503,6 @@
         reader.readAsArrayBuffer(file);
     }
 
-    function parseSapDate(val) {
-        if (!val) return null;
-        if (val instanceof Date) return val.toISOString().split('T')[0];
-        let s = val.toString().trim();
-        if (s.includes('T')) return s.split('T')[0];
-        return s;
-    }
-
     function strVal(v) {
         return v ? v.toString().trim() : '';
     }
@@ -469,7 +519,8 @@
             const matchStation = (st === 'ALL' || d.station === st);
             const matchType = (tp === 'ALL' || d.taskType === tp);
             const matchStatus = (stat === 'ALL' || d.status === stat);
-            const matchYear = (yr === 'ALL' || (d.plannedDate && d.plannedDate.startsWith(yr)));
+            const taskYear = getYearFromDate(d.plannedDate);
+            const matchYear = (yr === 'ALL' || taskYear === yr);
             return matchStation && matchType && matchStatus && matchYear;
         });
 
@@ -491,14 +542,17 @@
         const tbody = document.getElementById('table-body');
         tbody.innerHTML = '';
         filteredData.slice(0, 150).forEach(row => {
+            const formattedSched = parseSapDate(row.plannedDate) || '-';
+            const formattedComp = parseSapDate(row.actualDoneDate);
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="p-3 font-mono font-bold text-slate-700">${row.orderNo}</td>
                 <td class="p-3 font-bold text-slate-700">${row.station}</td>
                 <td class="p-3 font-medium text-slate-800">${row.equipment}</td>
                 <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${row.taskType === 'Calibration' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${row.taskType}</span></td>
-                <td class="p-3">${row.plannedDate || '-'}</td>
-                <td class="p-3 font-semibold ${row.actualDoneDate ? 'text-emerald-600' : 'text-slate-400'}">${row.actualDoneDate || 'Pending'}</td>
+                <td class="p-3">${formattedSched}</td>
+                <td class="p-3 font-semibold ${formattedComp ? 'text-emerald-600' : 'text-slate-400'}">${formattedComp || 'Pending'}</td>
                 <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${row.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">${row.status}</span></td>
             `;
             tbody.appendChild(tr);
@@ -589,7 +643,12 @@
     }
 
     function exportFilteredExcel() {
-        const ws = XLSX.utils.json_to_sheet(filteredData);
+        const formattedExport = filteredData.map(item => ({
+            ...item,
+            plannedDate: parseSapDate(item.plannedDate),
+            actualDoneDate: parseSapDate(item.actualDoneDate) || 'Pending'
+        }));
+        const ws = XLSX.utils.json_to_sheet(formattedExport);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Filtered_Tasks");
         XLSX.writeFile(wb, "PMHBL_Filtered_Maintenance_Report.xlsx");
