@@ -25,6 +25,10 @@
             
             <!-- SAP UPDATE & ACTION BUTTONS -->
             <div class="flex items-center space-x-2">
+
+<button id="authorize_button" onclick="handleAuthClick()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition">
+                🔑 Sign In to Google Drive
+            </button>
                 <input type="file" id="sap-file-input" accept=".xlsx, .xls" class="hidden" onchange="mergeMonthlySapFile(this)">
                 
                 <button onclick="document.getElementById('sap-file-input').click()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition flex items-center space-x-1">
@@ -184,63 +188,105 @@ const CLIENT_ID = '649866247792-copqg0ntuau4lpj742u7bq3ujdpfmb40.apps.googleuser
         const API_KEY = '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';
         const FILE_ID = '1SKWW9Rp7YcJkT6cJ6tnmADdt7OEnYYNQ'; // From Phase 2 Step 5
         const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+let tokenClient;
+let gapiInited = false;
+let gsisInited = false;
 
-        let tokenClient;
-        let gapiInited = false;
+function gapiLoaded() {
+    gapi.load('client', async () => {
+        await gapi.client.init({
+            apiKey: API_KEY,
+            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
+        });
+        gapiInited = true;
+        maybeEnableButtons();
+    });
+}
 
-        // Initialize Google API Client Library
-        function gapiLoaded() {
-            gapi.load('client', async () => {
-                await gapi.client.init({
-                    apiKey: API_KEY,
-                    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
-                });
-                gapiInited = true;
-                fetchDatabaseFromDrive();
-            });
+function gisLoaded() {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: '', // defined later
+    });
+    gsisInited = true;
+    maybeEnableButtons();
+}
+
+function maybeEnableButtons() {
+    if (gapiInited && gsisInited) {
+        // Try fetching if token already exists in browser session
+        if (gapi.client.getToken() !== null) {
+            fetchDatabaseFromDrive();
         }
+    }
+}
 
-        // Fetch Database automatically from Google Drive on Load
-        async function fetchDatabaseFromDrive() {
-            try {
-                const response = await gapi.client.drive.files.get({
-                    fileId: FILE_ID,
-                    alt: 'media'
-                });
-                
-                const jsonContent = response.result;
-                jsonContent.forEach(item => database.set(item.orderNo, item));
-                
-                applyFilters(); // Renders tables and graphs automatically
-                console.log("Database successfully synced from Google Drive!");
-            } catch (err) {
-                console.error("Error fetching database from Drive:", err);
-            }
+function handleAuthClick() {
+    tokenClient.callback = async (resp) => {
+        if (resp.error !== undefined) {
+            throw (resp);
         }
+        document.getElementById('authorize_button').innerText = '✅ Connected to Drive';
+        document.getElementById('authorize_button').classList.replace('bg-blue-600', 'bg-emerald-600');
+        await fetchDatabaseFromDrive();
+    };
 
-        // Save updated data back to Google Drive after Monthly SAP merge
-        async function saveDatabaseToDrive() {
-            const updatedData = JSON.stringify(Array.from(database.values()), null, 2);
-            const blob = new Blob([updatedData], { type: 'application/json' });
+    if (gapi.client.getToken() === null) {
+        // Prompt the user to select a Google Account and ask for consent
+        tokenClient.requestAccessToken({prompt: 'consent'});
+    } else {
+        tokenClient.requestAccessToken({prompt: ''});
+    }
+}
 
-            const metadata = {
-                name: 'pmhbl_database.json',
-                mimeType: 'application/json'
-            };
+// Read Database from Google Drive
+async function fetchDatabaseFromDrive() {
+    try {
+        const response = await gapi.client.drive.files.get({
+            fileId: FILE_ID,
+            alt: 'media'
+        });
+        
+        const jsonContent = response.result;
+        database.clear();
+        jsonContent.forEach(item => database.set(item.orderNo, item));
+        
+        applyFilters(); // Refreshes dashboard counters and charts
+        console.log("Database successfully loaded from Google Drive!");
+    } catch (err) {
+        console.error("Error fetching database from Drive:", err);
+    }
+}
 
-            const accessToken = gapi.client.getToken().access_token;
-            const form = new FormData();
-            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-            form.append('file', blob);
+// Save Updated Dataset Back to Google Drive
+async function saveDatabaseToDrive() {
+    if (gapi.client.getToken() === null) {
+        alert("Please click 'Sign In to Google Drive' first to save updates to the cloud!");
+        return;
+    }
 
-            fetch(`https://www.googleapis.com/upload/drive/v3/files/${FILE_ID}?uploadType=multipart`, {
-                method: 'PATCH',
-                headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
-                body: form
-            }).then(res => res.json())
-              .then(val => alert("✅ Database updated and saved to Google Drive successfully!"))
-              .catch(err => console.error("Update failed:", err));
-        }
+    const updatedData = JSON.stringify(Array.from(database.values()), null, 2);
+    const blob = new Blob([updatedData], { type: 'application/json' });
+
+    const metadata = {
+        name: 'pmhbl_database.json',
+        mimeType: 'application/json'
+    };
+
+    const accessToken = gapi.client.getToken().access_token;
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', blob);
+
+    fetch(`https://www.googleapis.com/upload/drive/v3/files/${FILE_ID}?uploadType=multipart`, {
+        method: 'PATCH',
+        headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
+        body: form
+    }).then(res => res.json())
+      .then(val => alert("✅ Database updated and saved permanently to Google Drive!"))
+      .catch(err => console.error("Update failed:", err));
+}
 
         
         let database = new Map(); // Key: Order No, Value: Task Object
