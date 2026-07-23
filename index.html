@@ -7,143 +7,173 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
-    <script async defer src="https://accounts.google.com/gsi/client"></script>
 </head>
 <body class="bg-slate-100 font-sans text-slate-800 min-h-screen flex flex-col">
 
-    <!-- HEADER BAR -->
-    <header class="bg-slate-900 text-white shadow-lg sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <div class="bg-orange-500 text-white font-black px-3 py-1 rounded text-xl">PMHBL</div>
-                <div>
-                    <h1 class="text-base font-bold leading-tight">Petronet MHB Limited</h1>
-                    <p class="text-xs text-slate-400">SAP Preventive Maintenance & Calibration Management</p>
-                </div>
+    <!-- LOGIN OVERLAY -->
+    <div id="loginOverlay" class="fixed inset-0 bg-slate-900 bg-opacity-95 z-[100] flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full border border-slate-200">
+            <div class="text-center mb-6">
+                <div class="inline-block bg-orange-500 text-white font-black px-4 py-2 rounded text-2xl mb-2">PMHBL</div>
+                <h2 class="text-xl font-bold text-slate-800">Planner Dashboard Access</h2>
+                <p class="text-xs text-slate-500 mt-1">Please enter credentials to access management tools</p>
             </div>
-            
-            <!-- SAP UPDATE & ACTION BUTTONS -->
-            <div class="flex items-center space-x-2">
 
-<button id="authorize_button" onclick="handleAuthClick()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition">
-                🔑 Sign In to Google Drive
-            </button>
-                <input type="file" id="sap-file-input" accept=".xlsx, .xls" class="hidden" onchange="mergeMonthlySapFile(this)">
-                
-                <button onclick="document.getElementById('sap-file-input').click()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition flex items-center space-x-1">
-                    <span>🔄 Upload Monthly SAP Export</span>
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Username</label>
+                    <input type="text" id="loginUsername" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm text-slate-800" placeholder="Enter username">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Password</label>
+                    <input type="password" id="loginPassword" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm text-slate-800" placeholder="Enter password">
+                </div>
+                <p id="loginError" class="text-xs text-red-600 font-bold hidden text-center">❌ Invalid username or password</p>
+                <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-lg shadow transition text-sm">
+                    🔓 Log In
                 </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MAIN APP WRAPPER -->
+    <div id="app" class="flex flex-col min-h-screen">
+        <!-- HEADER BAR -->
+        <header class="bg-slate-900 text-white shadow-lg sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-orange-500 text-white font-black px-3 py-1 rounded text-xl">PMHBL</div>
+                    <div>
+                        <h1 class="text-base font-bold leading-tight">Petronet MHB Limited</h1>
+                        <p class="text-xs text-slate-400">SAP Preventive Maintenance & Calibration Management</p>
+                    </div>
+                </div>
                 
-                <button onclick="generatePlannerReport()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition flex items-center space-x-1">
-                    <span>📋 Maintenance Planner Report</span>
+                <!-- SAP UPDATE & ACTION BUTTONS -->
+                <div class="flex items-center space-x-2">
+                    <button id="authorize_button" onclick="handleAuthClick()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition">
+                        🔑 Sign In to Google Drive
+                    </button>
+
+                    <button onclick="promptChangePassword()" class="bg-slate-700 hover:bg-slate-800 text-white text-xs px-3 py-2 rounded font-bold shadow transition">
+                        ⚙️ Password
+                    </button>
+
+                    <input type="file" id="sap-file-input" accept=".xlsx, .xls" class="hidden" onchange="mergeMonthlySapFile(this)">
+                    
+                    <button onclick="document.getElementById('sap-file-input').click()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition flex items-center space-x-1">
+                        <span>🔄 Upload Monthly SAP Export</span>
+                    </button>
+                    
+                    <button onclick="generatePlannerReport()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition flex items-center space-x-1">
+                        <span>📋 Maintenance Planner Report</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-7xl mx-auto px-4 py-6 w-full space-y-6 flex-grow">
+            <!-- TOP FILTER BAR -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center justify-between">
+                <div class="flex flex-wrap gap-3 items-center">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase">Station</label>
+                        <select id="filter-station" onchange="applyFilters()" class="bg-slate-50 border border-slate-300 text-xs font-bold rounded p-2">
+                            <option value="ALL">All Stations</option>
+                            <option value="Mangalore">Mangalore (PT02)</option>
+                            <option value="Neriya">Neriya (PT03)</option>
+                            <option value="Hassan">Hassan (PT04)</option>
+                            <option value="DKN">DKN (PT05)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase">Activity Type</label>
+                        <select id="filter-type" onchange="applyFilters()" class="bg-slate-50 border border-slate-300 text-xs font-bold rounded p-2">
+                            <option value="ALL">All Activities</option>
+                            <option value="Preventive Maintenance">Preventive Maintenance (PM02)</option>
+                            <option value="Calibration">Calibration (PM05)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase">Status</label>
+                        <select id="filter-status" onchange="applyFilters()" class="bg-slate-50 border border-slate-300 text-xs font-bold rounded p-2">
+                            <option value="ALL">All Status</option>
+                            <option value="COMPLETED">Executed (Completed)</option>
+                            <option value="PENDING">Pending Work</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase">Year</label>
+                        <select id="filter-year" onchange="applyFilters()" class="bg-slate-50 border border-slate-300 text-xs font-bold rounded p-2">
+                            <option value="ALL">All Years</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <button onclick="exportFilteredExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-4 py-2 rounded font-bold shadow">
+                    📊 Export Filtered Excel
                 </button>
             </div>
-        </div>
-    </header>
 
-    <main class="max-w-7xl mx-auto px-4 py-6 w-full space-y-6 flex-grow">
-        
-        <!-- TOP FILTER BAR -->
-        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center justify-between">
-            <div class="flex flex-wrap gap-3 items-center">
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase">Station</label>
-                    <select id="filter-station" onchange="applyFilters()" class="bg-slate-50 border border-slate-300 text-xs font-bold rounded p-2">
-                        <option value="ALL">All Stations</option>
-                        <option value="Mangalore">Mangalore (PT02)</option>
-                        <option value="Neriya">Neriya (PT03)</option>
-                        <option value="Hassan">Hassan (PT04)</option>
-                        <option value="DKN">DKN (PT05)</option>
-                    </select>
+            <!-- KPI CARDS -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <span class="text-xs font-bold text-slate-400 uppercase">Total Planned Tasks</span>
+                    <span id="kpi-total" class="text-3xl font-black text-slate-800 block mt-1">0</span>
                 </div>
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase">Activity Type</label>
-                    <select id="filter-type" onchange="applyFilters()" class="bg-slate-50 border border-slate-300 text-xs font-bold rounded p-2">
-                        <option value="ALL">All Activities</option>
-                        <option value="Preventive Maintenance">Preventive Maintenance (PM02)</option>
-                        <option value="Calibration">Calibration (PM05)</option>
-                    </select>
+                <div class="bg-emerald-50 p-5 rounded-xl border border-emerald-200 shadow-sm">
+                    <span class="text-xs font-bold text-emerald-700 uppercase">Executed Tasks</span>
+                    <span id="kpi-completed" class="text-3xl font-black text-emerald-800 block mt-1">0</span>
                 </div>
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase">Status</label>
-                    <select id="filter-status" onchange="applyFilters()" class="bg-slate-50 border border-slate-300 text-xs font-bold rounded p-2">
-                        <option value="ALL">All Status</option>
-                        <option value="COMPLETED">Executed (Completed)</option>
-                        <option value="PENDING">Pending Work</option>
-                    </select>
+                <div class="bg-amber-50 p-5 rounded-xl border border-amber-200 shadow-sm">
+                    <span class="text-xs font-bold text-amber-700 uppercase">Pending Tasks</span>
+                    <span id="kpi-pending" class="text-3xl font-black text-amber-800 block mt-1">0</span>
                 </div>
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase">Year</label>
-                    <select id="filter-year" onchange="applyFilters()" class="bg-slate-50 border border-slate-300 text-xs font-bold rounded p-2">
-                        <option value="ALL">All Years</option>
-                    </select>
+                <div class="bg-blue-50 p-5 rounded-xl border border-blue-200 shadow-sm">
+                    <span class="text-xs font-bold text-blue-700 uppercase">Execution Compliance</span>
+                    <span id="kpi-compliance" class="text-3xl font-black text-blue-800 block mt-1">0%</span>
                 </div>
             </div>
-            
-            <button onclick="exportFilteredExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-4 py-2 rounded font-bold shadow">
-                📊 Export Filtered Excel
-            </button>
-        </div>
 
-        <!-- KPI CARDS -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                <span class="text-xs font-bold text-slate-400 uppercase">Total Planned Tasks</span>
-                <span id="kpi-total" class="text-3xl font-black text-slate-800 block mt-1">0</span>
+            <!-- CHARTS SECTION -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 class="text-sm font-bold text-slate-700 mb-4">Executed vs Pending by Station</h3>
+                    <div class="h-64"><canvas id="chart-station"></canvas></div>
+                </div>
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 class="text-sm font-bold text-slate-700 mb-4">Maintenance vs Calibration Compliance</h3>
+                    <div class="h-64"><canvas id="chart-type"></canvas></div>
+                </div>
             </div>
-            <div class="bg-emerald-50 p-5 rounded-xl border border-emerald-200 shadow-sm">
-                <span class="text-xs font-bold text-emerald-700 uppercase">Executed Tasks</span>
-                <span id="kpi-completed" class="text-3xl font-black text-emerald-800 block mt-1">0</span>
-            </div>
-            <div class="bg-amber-50 p-5 rounded-xl border border-amber-200 shadow-sm">
-                <span class="text-xs font-bold text-amber-700 uppercase">Pending Tasks</span>
-                <span id="kpi-pending" class="text-3xl font-black text-amber-800 block mt-1">0</span>
-            </div>
-            <div class="bg-blue-50 p-5 rounded-xl border border-blue-200 shadow-sm">
-                <span class="text-xs font-bold text-blue-700 uppercase">Execution Compliance</span>
-                <span id="kpi-compliance" class="text-3xl font-black text-blue-800 block mt-1">0%</span>
-            </div>
-        </div>
 
-        <!-- CHARTS SECTION -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                <h3 class="text-sm font-bold text-slate-700 mb-4">Executed vs Pending by Station</h3>
-                <div class="h-64"><canvas id="chart-station"></canvas></div>
+            <!-- DATA MATRIX -->
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                    <h3 class="text-sm font-bold text-slate-700">SAP Maintenance Master Log</h3>
+                    <span id="record-count" class="text-xs font-bold bg-slate-200 px-2 py-1 rounded">0 records</span>
+                </div>
+                <div class="overflow-x-auto max-h-96">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead class="bg-slate-100 sticky top-0 font-bold text-slate-600">
+                            <tr>
+                                <th class="p-3 border-b">Order No</th>
+                                <th class="p-3 border-b">Station</th>
+                                <th class="p-3 border-b">Equipment Description</th>
+                                <th class="p-3 border-b">Type</th>
+                                <th class="p-3 border-b">Scheduled Date</th>
+                                <th class="p-3 border-b">Completion Date</th>
+                                <th class="p-3 border-b">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body" class="divide-y divide-slate-200">
+                            <!-- Dynamic Rows -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                <h3 class="text-sm font-bold text-slate-700 mb-4">Maintenance vs Calibration Compliance</h3>
-                <div class="h-64"><canvas id="chart-type"></canvas></div>
-            </div>
-        </div>
-
-        <!-- DATA MATRIX -->
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div class="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                <h3 class="text-sm font-bold text-slate-700">SAP Maintenance Master Log</h3>
-                <span id="record-count" class="text-xs font-bold bg-slate-200 px-2 py-1 rounded">0 records</span>
-            </div>
-            <div class="overflow-x-auto max-h-96">
-                <table class="w-full text-left border-collapse text-xs">
-                    <thead class="bg-slate-100 sticky top-0 font-bold text-slate-600">
-                        <tr>
-                            <th class="p-3 border-b">Order No</th>
-                            <th class="p-3 border-b">Station</th>
-                            <th class="p-3 border-b">Equipment Description</th>
-                            <th class="p-3 border-b">Type</th>
-                            <th class="p-3 border-b">Scheduled Date</th>
-                            <th class="p-3 border-b">Completion Date</th>
-                            <th class="p-3 border-b">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="table-body" class="divide-y divide-slate-200">
-                        <!-- Dynamic Rows -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </main>
+        </main>
+    </div>
 
     <!-- MODAL: MAINTENANCE PLANNER REPORT -->
     <div id="planner-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center hidden z-50">
@@ -183,332 +213,390 @@
         </div>
     </div>
 
+    <!-- JAVASCRIPT ENGINE -->
     <script>
-const CLIENT_ID = '649866247792-copqg0ntuau4lpj742u7bq3ujdpfmb40.apps.googleusercontent.com';
-        const API_KEY = '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';
-        const FILE_ID = '1SKWW9Rp7YcJkT6cJ6tnmADdt7OEnYYNQ'; // From Phase 2 Step 5
-        const SCOPES = 'https://www.googleapis.com/auth/drive.file';
-let tokenClient;
-let gapiInited = false;
-let gsisInited = false;
+    // --- 1. LOCAL AUTHENTICATION SECURITY ---
+    const DEFAULT_USER = "admin";
+    const DEFAULT_PASS = "admin123";
 
-function gapiLoaded() {
-    gapi.load('client', async () => {
-        await gapi.client.init({
-            apiKey: API_KEY,
-            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
-        });
-        gapiInited = true;
-        maybeEnableButtons();
+    function getSavedPassword() {
+        return localStorage.getItem('pmhbl_pass') || DEFAULT_PASS;
+    }
+
+    function getSavedUsername() {
+        return localStorage.getItem('pmhbl_user') || DEFAULT_USER;
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        const isLoggedIn = sessionStorage.getItem('pmhbl_logged_in');
+        const overlay = document.getElementById('loginOverlay');
+        if (isLoggedIn === 'true' && overlay) {
+            overlay.classList.add('hidden');
+        }
     });
-}
 
-function gisLoaded() {
-    tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: '', // defined later
-    });
-    gsisInited = true;
-    maybeEnableButtons();
-}
+    function handleLogin(e) {
+        e.preventDefault();
+        const userIn = document.getElementById('loginUsername').value.trim();
+        const passIn = document.getElementById('loginPassword').value.trim();
+        const errorMsg = document.getElementById('loginError');
 
-function maybeEnableButtons() {
-    if (gapiInited && gsisInited) {
-        // Try fetching if token already exists in browser session
-        if (gapi.client.getToken() !== null) {
-            fetchDatabaseFromDrive();
+        if (userIn === getSavedUsername() && passIn === getSavedPassword()) {
+            sessionStorage.setItem('pmhbl_logged_in', 'true');
+            document.getElementById('loginOverlay').classList.add('hidden');
+            errorMsg.classList.add('hidden');
+        } else {
+            errorMsg.classList.remove('hidden');
         }
     }
-}
 
-function handleAuthClick() {
-    tokenClient.callback = async (resp) => {
-        if (resp.error !== undefined) {
-            throw (resp);
+    function promptChangePassword() {
+        const currentPass = prompt("Enter your CURRENT password:");
+        if (currentPass !== getSavedPassword()) {
+            alert("❌ Incorrect current password!");
+            return;
         }
-        document.getElementById('authorize_button').innerText = '✅ Connected to Drive';
-        document.getElementById('authorize_button').classList.replace('bg-blue-600', 'bg-emerald-600');
-        await fetchDatabaseFromDrive();
-    };
 
-    if (gapi.client.getToken() === null) {
-        // Prompt the user to select a Google Account and ask for consent
-        tokenClient.requestAccessToken({prompt: 'consent'});
-    } else {
-        tokenClient.requestAccessToken({prompt: ''});
+        const newPass = prompt("Enter your NEW password:");
+        if (!newPass || newPass.trim() === "") {
+            alert("⚠️ Password cannot be empty!");
+            return;
+        }
+
+        localStorage.setItem('pmhbl_pass', newPass.trim());
+        alert("✅ Password successfully updated! Use your new password next time you log in.");
     }
-}
 
-// Read Database from Google Drive
-async function fetchDatabaseFromDrive() {
-    try {
-        const response = await gapi.client.drive.files.get({
-            fileId: FILE_ID,
-            alt: 'media'
+    // --- 2. GOOGLE DRIVE SYNC ENGINE ---
+    const CLIENT_ID = '649866247792-copqg0ntuau4lpj742u7bq3ujdpfmb40.apps.googleusercontent.com';
+    const API_KEY = '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';
+    const FILE_ID = '1SKWW9Rp7YcJkT6cJ6tnmADdt7OEnYYNQ';
+    const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+    let tokenClient;
+
+    function gisLoaded() {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            callback: (response) => {
+                if (response.error) {
+                    console.error("Auth error:", response);
+                    alert("Authentication Failed: " + response.error);
+                    return;
+                }
+                sessionStorage.setItem('gdrive_token', response.access_token);
+                updateAuthStatus(true);
+                fetchDatabaseFromDrive(response.access_token);
+            },
         });
-        
-        const jsonContent = response.result;
-        database.clear();
-        jsonContent.forEach(item => database.set(item.orderNo, item));
-        
-        applyFilters(); // Refreshes dashboard counters and charts
-        console.log("Database successfully loaded from Google Drive!");
-    } catch (err) {
-        console.error("Error fetching database from Drive:", err);
-    }
-}
 
-// Save Updated Dataset Back to Google Drive
-async function saveDatabaseToDrive() {
-    if (gapi.client.getToken() === null) {
-        alert("Please click 'Sign In to Google Drive' first to save updates to the cloud!");
-        return;
-    }
-
-    const updatedData = JSON.stringify(Array.from(database.values()), null, 2);
-    const blob = new Blob([updatedData], { type: 'application/json' });
-
-    const metadata = {
-        name: 'pmhbl_database.json',
-        mimeType: 'application/json'
-    };
-
-    const accessToken = gapi.client.getToken().access_token;
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file', blob);
-
-    fetch(`https://www.googleapis.com/upload/drive/v3/files/${FILE_ID}?uploadType=multipart`, {
-        method: 'PATCH',
-        headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
-        body: form
-    }).then(res => res.json())
-      .then(val => alert("✅ Database updated and saved permanently to Google Drive!"))
-      .catch(err => console.error("Update failed:", err));
-}
-
-        
-        let database = new Map(); // Key: Order No, Value: Task Object
-        let filteredData = [];
-        let stationChartObj = null;
-        let typeChartObj = null;
-
-        // Populate Years
-        const yearSelect = document.getElementById('filter-year');
-        for(let y = 2020; y <= 2031; y++) {
-            let opt = document.createElement('option');
-            opt.value = y;
-            opt.textContent = y;
-            yearSelect.appendChild(opt);
+        const savedToken = sessionStorage.getItem('gdrive_token');
+        if (savedToken) {
+            updateAuthStatus(true);
+            fetchDatabaseFromDrive(savedToken);
         }
+    }
 
-        const plantMap = {'PT02': 'Mangalore', 'PT03': 'Neriya', 'PT04': 'Hassan', 'PT05': 'DKN'};
-        const typeMap = {'PM02': 'Preventive Maintenance', 'PM05': 'Calibration'};
+    function handleAuthClick() {
+        if (!tokenClient) {
+            alert("Google Authentication library is still loading. Please wait 3 seconds and try again.");
+            return;
+        }
+        tokenClient.requestAccessToken({ prompt: '' });
+    }
 
-        // 1. SAP MONTHLY DELTA UPDATE ENGINE
-        function mergeMonthlySapFile(input) {
-            const file = input.files[0];
-            if (!file) return;
+    function updateAuthStatus(isConnected) {
+        const btn = document.getElementById('authorize_button');
+        if (btn) {
+            if (isConnected) {
+                btn.innerText = '✅ Connected to Drive';
+                btn.className = 'bg-emerald-600 text-white text-xs px-3 py-2 rounded font-bold shadow transition';
+            } else {
+                btn.innerText = '🔑 Sign In to Google Drive';
+                btn.className = 'bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition';
+            }
+        }
+    }
 
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, {type: 'array'});
-                const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                const rows = XLSX.utils.sheet_to_json(sheet);
+    async function fetchDatabaseFromDrive(token) {
+        const accessToken = token || sessionStorage.getItem('gdrive_token');
+        if (!accessToken) return;
 
-                let updatedCount = 0;
-                let newCount = 0;
+        try {
+            const response = await fetch(`https://www.googleapis.com/drive/v3/files/${FILE_ID}?alt=media`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
 
-                rows.forEach(row => {
-                    const orderNo = strVal(row['Order']);
-                    const compDate = parseSapDate(row['Completion date']);
-                    const schedDate = parseSapDate(row['Scheduled start date'] || row['Planned date']);
-                    
-                    if (!orderNo) return;
+            if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
 
-                    if (database.has(orderNo)) {
-                        // Update existing record if new completion date is available
-                        let existing = database.get(orderNo);
-                        if (!existing.actualDoneDate && compDate) {
-                            existing.actualDoneDate = compDate;
-                            existing.status = 'COMPLETED';
-                            updatedCount++;
-                        }
-                    } else {
-                        // Insert new SAP Order
-                        database.set(orderNo, {
-                            orderNo: orderNo,
-                            plantCode: row['Maintenance Plant'],
-                            station: plantMap[row['Maintenance Plant']] || row['Maintenance Plant'],
-                            equipment: row['Description of technical object'] || row['Equipment'],
-                            taskType: typeMap[row['Order Type']] || row['Order Type'],
-                            plannedDate: schedDate,
-                            actualDoneDate: compDate,
-                            status: compDate ? 'COMPLETED' : 'PENDING'
-                        });
-                        newCount++;
-                    }
-                });
-
-                alert(`SAP Monthly Update Completed!\n\n✅ Updated completion dates: ${updatedCount}\n🆕 New maintenance orders added: ${newCount}`);
+            const jsonContent = await response.json();
+            
+            if (Array.isArray(jsonContent)) {
+                database.clear();
+                jsonContent.forEach(item => database.set(item.orderNo, item));
                 applyFilters();
-saveDatabaseToDrive();
-            };
-            reader.readAsArrayBuffer(file);
+                console.log("Database successfully loaded from Google Drive!");
+            }
+        } catch (err) {
+            console.error("Error fetching database from Drive:", err);
+        }
+    }
+
+    async function saveDatabaseToDrive() {
+        const accessToken = sessionStorage.getItem('gdrive_token');
+        if (!accessToken) {
+            alert("Please click 'Sign In to Google Drive' first to save updates to the cloud!");
+            return;
         }
 
-        function parseSapDate(val) {
-            if (!val) return null;
-            if (val instanceof Date) return val.toISOString().split('T')[0];
-            let s = val.toString().trim();
-            if (s.includes('T')) return s.split('T')[0];
-            return s;
-        }
+        const updatedData = JSON.stringify(Array.from(database.values()), null, 2);
+        const blob = new Blob([updatedData], { type: 'application/json' });
 
-        function strVal(v) {
-            return v ? v.toString().trim() : '';
-        }
+        const metadata = {
+            name: 'pmhbl_database.json',
+            mimeType: 'application/json'
+        };
 
-        function applyFilters() {
-            const st = document.getElementById('filter-station').value;
-            const tp = document.getElementById('filter-type').value;
-            const stat = document.getElementById('filter-status').value;
-            const yr = document.getElementById('filter-year').value;
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', blob);
 
-            const allTasks = Array.from(database.values());
-
-            filteredData = allTasks.filter(d => {
-                const matchStation = (st === 'ALL' || d.station === st);
-                const matchType = (tp === 'ALL' || d.taskType === tp);
-                const matchStatus = (stat === 'ALL' || d.status === stat);
-                const matchYear = (yr === 'ALL' || (d.plannedDate && d.plannedDate.startsWith(yr)));
-                return matchStation && matchType && matchStatus && matchYear;
+        try {
+            const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${FILE_ID}?uploadType=multipart`, {
+                method: 'PATCH',
+                headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
+                body: form
             });
-
-            renderDashboard();
+            if (res.ok) {
+                alert("✅ Database updated and saved permanently to Google Drive!");
+            } else {
+                throw new Error("Save request failed");
+            }
+        } catch (err) {
+            console.error("Update failed:", err);
+            alert("❌ Failed to save updates to Google Drive.");
         }
+    }
 
-        function renderDashboard() {
-            const total = filteredData.length;
-            const completed = filteredData.filter(d => d.status === 'COMPLETED').length;
-            const pending = total - completed;
-            const compliance = total > 0 ? ((completed / total) * 100).toFixed(1) : 0;
+    // --- 3. DASHBOARD DATA & FILTER LOGIC ---
+    let database = new Map();
+    let filteredData = [];
+    let stationChartObj = null;
+    let typeChartObj = null;
 
-            document.getElementById('kpi-total').textContent = total.toLocaleString();
-            document.getElementById('kpi-completed').textContent = completed.toLocaleString();
-            document.getElementById('kpi-pending').textContent = pending.toLocaleString();
-            document.getElementById('kpi-compliance').textContent = `${compliance}%`;
-            document.getElementById('record-count').textContent = `${filteredData.length} items`;
+    const yearSelect = document.getElementById('filter-year');
+    for(let y = 2020; y <= 2031; y++) {
+        let opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = y;
+        yearSelect.appendChild(opt);
+    }
 
-            const tbody = document.getElementById('table-body');
-            tbody.innerHTML = '';
-            filteredData.slice(0, 150).forEach(row => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td class="p-3 font-mono font-bold text-slate-700">${row.orderNo}</td>
-                    <td class="p-3 font-bold text-slate-700">${row.station}</td>
-                    <td class="p-3 font-medium text-slate-800">${row.equipment}</td>
-                    <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${row.taskType === 'Calibration' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${row.taskType}</span></td>
-                    <td class="p-3">${row.plannedDate || '-'}</td>
-                    <td class="p-3 font-semibold ${row.actualDoneDate ? 'text-emerald-600' : 'text-slate-400'}">${row.actualDoneDate || 'Pending'}</td>
-                    <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${row.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">${row.status}</span></td>
-                `;
-                tbody.appendChild(tr);
-            });
+    const plantMap = {'PT02': 'Mangalore', 'PT03': 'Neriya', 'PT04': 'Hassan', 'PT05': 'DKN'};
+    const typeMap = {'PM02': 'Preventive Maintenance', 'PM05': 'Calibration'};
 
-            renderCharts();
-        }
+    function mergeMonthlySapFile(input) {
+        const file = input.files[0];
+        if (!file) return;
 
-        function renderCharts() {
-            const stations = ['Mangalore', 'Neriya', 'Hassan', 'DKN'];
-            const completedByStation = stations.map(s => filteredData.filter(d => d.station === s && d.status === 'COMPLETED').length);
-            const pendingByStation = stations.map(s => filteredData.filter(d => d.station === s && d.status === 'PENDING').length);
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(sheet);
 
-            if (stationChartObj) stationChartObj.destroy();
-            stationChartObj = new Chart(document.getElementById('chart-station'), {
-                type: 'bar',
-                data: {
-                    labels: stations,
-                    datasets: [
-                        { label: 'Executed', data: completedByStation, backgroundColor: '#10B981' },
-                        { label: 'Pending', data: pendingByStation, backgroundColor: '#F59E0B' }
-                    ]
-                },
-                options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }
-            });
+            let updatedCount = 0;
+            let newCount = 0;
 
-            const pmCount = filteredData.filter(d => d.taskType === 'Preventive Maintenance').length;
-            const calCount = filteredData.filter(d => d.taskType === 'Calibration').length;
+            rows.forEach(row => {
+                const orderNo = strVal(row['Order']);
+                const compDate = parseSapDate(row['Completion date']);
+                const schedDate = parseSapDate(row['Scheduled start date'] || row['Planned date']);
+                
+                if (!orderNo) return;
 
-            if (typeChartObj) typeChartObj.destroy();
-            typeChartObj = new Chart(document.getElementById('chart-type'), {
-                type: 'doughnut',
-                data: {
-                    labels: ['Preventive Maintenance (PM02)', 'Calibration (PM05)'],
-                    datasets: [{ data: [pmCount, calCount], backgroundColor: ['#3B82F6', '#A855F7'] }]
-                },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
-        }
-
-        // 2. MAINTENANCE PLANNER REPORT GENERATION
-        function generatePlannerReport() {
-            const tbody = document.getElementById('planner-report-body');
-            tbody.innerHTML = '';
-
-            const stations = ['Mangalore', 'Neriya', 'Hassan', 'DKN'];
-            const types = ['Preventive Maintenance', 'Calibration'];
-            const summaryRows = [];
-
-            stations.forEach(st => {
-                types.forEach(tp => {
-                    const subset = filteredData.filter(d => d.station === st && d.taskType === tp);
-                    const total = subset.length;
-                    const executed = subset.filter(d => d.status === 'COMPLETED').length;
-                    const pending = total - executed;
-                    const compliance = total > 0 ? ((executed / total) * 100).toFixed(1) : '0.0';
-
-                    if (total > 0) {
-                        summaryRows.push({ station: st, taskType: tp, total, executed, pending, compliance });
-                        
-                        const tr = document.createElement('tr');
-                        tr.innerHTML = `
-                            <td class="p-2 border font-bold">${st}</td>
-                            <td class="p-2 border">${tp}</td>
-                            <td class="p-2 border text-center font-bold">${total}</td>
-                            <td class="p-2 border text-center text-emerald-600 font-bold">${executed}</td>
-                            <td class="p-2 border text-center text-amber-600 font-bold">${pending}</td>
-                            <td class="p-2 border text-center font-bold ${compliance >= 90 ? 'text-emerald-600' : 'text-rose-600'}">${compliance}%</td>
-                        `;
-                        tbody.appendChild(tr);
+                if (database.has(orderNo)) {
+                    let existing = database.get(orderNo);
+                    if (!existing.actualDoneDate && compDate) {
+                        existing.actualDoneDate = compDate;
+                        existing.status = 'COMPLETED';
+                        updatedCount++;
                     }
-                });
+                } else {
+                    database.set(orderNo, {
+                        orderNo: orderNo,
+                        plantCode: row['Maintenance Plant'],
+                        station: plantMap[row['Maintenance Plant']] || row['Maintenance Plant'],
+                        equipment: row['Description of technical object'] || row['Equipment'],
+                        taskType: typeMap[row['Order Type']] || row['Order Type'],
+                        plannedDate: schedDate,
+                        actualDoneDate: compDate,
+                        status: compDate ? 'COMPLETED' : 'PENDING'
+                    });
+                    newCount++;
+                }
             });
 
-            window.currentPlannerSummary = summaryRows;
-            document.getElementById('planner-modal').classList.remove('hidden');
-        }
+            alert(`SAP Monthly Update Completed!\n\n✅ Updated completion dates: ${updatedCount}\n🆕 New maintenance orders added: ${newCount}`);
+            applyFilters();
+            saveDatabaseToDrive();
+        };
+        reader.readAsArrayBuffer(file);
+    }
 
-        function closePlannerReport() {
-            document.getElementById('planner-modal').classList.add('hidden');
-        }
+    function parseSapDate(val) {
+        if (!val) return null;
+        if (val instanceof Date) return val.toISOString().split('T')[0];
+        let s = val.toString().trim();
+        if (s.includes('T')) return s.split('T')[0];
+        return s;
+    }
 
-        function exportPlannerSummaryExcel() {
-            if (!window.currentPlannerSummary) return;
-            const ws = XLSX.utils.json_to_sheet(window.currentPlannerSummary);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Planner_Summary");
-            XLSX.writeFile(wb, "Maintenance_Planner_Executed_vs_Pending_Report.xlsx");
-        }
+    function strVal(v) {
+        return v ? v.toString().trim() : '';
+    }
 
-        function exportFilteredExcel() {
-            const ws = XLSX.utils.json_to_sheet(filteredData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Filtered_Tasks");
-            XLSX.writeFile(wb, "PMHBL_Filtered_Maintenance_Report.xlsx");
-        }
+    function applyFilters() {
+        const st = document.getElementById('filter-station').value;
+        const tp = document.getElementById('filter-type').value;
+        const stat = document.getElementById('filter-status').value;
+        const yr = document.getElementById('filter-year').value;
+
+        const allTasks = Array.from(database.values());
+
+        filteredData = allTasks.filter(d => {
+            const matchStation = (st === 'ALL' || d.station === st);
+            const matchType = (tp === 'ALL' || d.taskType === tp);
+            const matchStatus = (stat === 'ALL' || d.status === stat);
+            const matchYear = (yr === 'ALL' || (d.plannedDate && d.plannedDate.startsWith(yr)));
+            return matchStation && matchType && matchStatus && matchYear;
+        });
+
+        renderDashboard();
+    }
+
+    function renderDashboard() {
+        const total = filteredData.length;
+        const completed = filteredData.filter(d => d.status === 'COMPLETED').length;
+        const pending = total - completed;
+        const compliance = total > 0 ? ((completed / total) * 100).toFixed(1) : 0;
+
+        document.getElementById('kpi-total').textContent = total.toLocaleString();
+        document.getElementById('kpi-completed').textContent = completed.toLocaleString();
+        document.getElementById('kpi-pending').textContent = pending.toLocaleString();
+        document.getElementById('kpi-compliance').textContent = `${compliance}%`;
+        document.getElementById('record-count').textContent = `${filteredData.length} items`;
+
+        const tbody = document.getElementById('table-body');
+        tbody.innerHTML = '';
+        filteredData.slice(0, 150).forEach(row => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="p-3 font-mono font-bold text-slate-700">${row.orderNo}</td>
+                <td class="p-3 font-bold text-slate-700">${row.station}</td>
+                <td class="p-3 font-medium text-slate-800">${row.equipment}</td>
+                <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${row.taskType === 'Calibration' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${row.taskType}</span></td>
+                <td class="p-3">${row.plannedDate || '-'}</td>
+                <td class="p-3 font-semibold ${row.actualDoneDate ? 'text-emerald-600' : 'text-slate-400'}">${row.actualDoneDate || 'Pending'}</td>
+                <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${row.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">${row.status}</span></td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        renderCharts();
+    }
+
+    function renderCharts() {
+        const stations = ['Mangalore', 'Neriya', 'Hassan', 'DKN'];
+        const completedByStation = stations.map(s => filteredData.filter(d => d.station === s && d.status === 'COMPLETED').length);
+        const pendingByStation = stations.map(s => filteredData.filter(d => d.station === s && d.status === 'PENDING').length);
+
+        if (stationChartObj) stationChartObj.destroy();
+        stationChartObj = new Chart(document.getElementById('chart-station'), {
+            type: 'bar',
+            data: {
+                labels: stations,
+                datasets: [
+                    { label: 'Executed', data: completedByStation, backgroundColor: '#10B981' },
+                    { label: 'Pending', data: pendingByStation, backgroundColor: '#F59E0B' }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }
+        });
+
+        const pmCount = filteredData.filter(d => d.taskType === 'Preventive Maintenance').length;
+        const calCount = filteredData.filter(d => d.taskType === 'Calibration').length;
+
+        if (typeChartObj) typeChartObj.destroy();
+        typeChartObj = new Chart(document.getElementById('chart-type'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Preventive Maintenance (PM02)', 'Calibration (PM05)'],
+                datasets: [{ data: [pmCount, calCount], backgroundColor: ['#3B82F6', '#A855F7'] }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    function generatePlannerReport() {
+        const tbody = document.getElementById('planner-report-body');
+        tbody.innerHTML = '';
+
+        const stations = ['Mangalore', 'Neriya', 'Hassan', 'DKN'];
+        const types = ['Preventive Maintenance', 'Calibration'];
+        const summaryRows = [];
+
+        stations.forEach(st => {
+            types.forEach(tp => {
+                const subset = filteredData.filter(d => d.station === st && d.taskType === tp);
+                const total = subset.length;
+                const executed = subset.filter(d => d.status === 'COMPLETED').length;
+                const pending = total - executed;
+                const compliance = total > 0 ? ((executed / total) * 100).toFixed(1) : '0.0';
+
+                if (total > 0) {
+                    summaryRows.push({ station: st, taskType: tp, total, executed, pending, compliance });
+                    
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="p-2 border font-bold">${st}</td>
+                        <td class="p-2 border">${tp}</td>
+                        <td class="p-2 border text-center font-bold">${total}</td>
+                        <td class="p-2 border text-center text-emerald-600 font-bold">${executed}</td>
+                        <td class="p-2 border text-center text-amber-600 font-bold">${pending}</td>
+                        <td class="p-2 border text-center font-bold ${compliance >= 90 ? 'text-emerald-600' : 'text-rose-600'}">${compliance}%</td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+            });
+        });
+
+        window.currentPlannerSummary = summaryRows;
+        document.getElementById('planner-modal').classList.remove('hidden');
+    }
+
+    function closePlannerReport() {
+        document.getElementById('planner-modal').classList.add('hidden');
+    }
+
+    function exportPlannerSummaryExcel() {
+        if (!window.currentPlannerSummary) return;
+        const ws = XLSX.utils.json_to_sheet(window.currentPlannerSummary);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Planner_Summary");
+        XLSX.writeFile(wb, "Maintenance_Planner_Executed_vs_Pending_Report.xlsx");
+    }
+
+    function exportFilteredExcel() {
+        const ws = XLSX.utils.json_to_sheet(filteredData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Filtered_Tasks");
+        XLSX.writeFile(wb, "PMHBL_Filtered_Maintenance_Report.xlsx");
+    }
     </script>
+
+    <!-- Google Identity Services SDK -->
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 </body>
 </html>
