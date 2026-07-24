@@ -10,7 +10,7 @@
 </head>
 <body class="bg-slate-100 font-sans text-slate-800 min-h-screen flex flex-col">
 
-    <!-- LOGIN OVERLAY (App-Level Credentials) -->
+    <!-- LOGIN OVERLAY -->
     <div id="loginOverlay" class="fixed inset-0 bg-slate-900 bg-opacity-95 z-[100] flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full border border-slate-200">
             <div class="text-center mb-6">
@@ -55,7 +55,6 @@
                         🔑 Sign In to Google Drive
                     </button>
 
-                    <!-- LOGOUT BUTTON -->
                     <button id="logout_button" onclick="handleLogout()" class="bg-rose-600 hover:bg-rose-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition hidden">
                         🚪 Logout
                     </button>
@@ -100,11 +99,31 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase">Status</label>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase">Status & Schedule</label>
                         <select id="filter-status" onchange="applyFilters()" class="bg-slate-50 border border-slate-300 text-xs font-bold rounded p-2">
                             <option value="ALL">All Status</option>
-                            <option value="COMPLETED">Executed (Completed)</option>
-                            <option value="PENDING">Pending Work</option>
+                            <option value="PM_PENDING">Pending Preventive Maintenance (PM02)</option>
+                            <option value="PM_COMPLETED">Executed Preventive Maintenance (PM02)</option>
+                            <option value="COMPLETED">All Executed Work</option>
+                            <option value="PENDING">All Pending Work</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase">Monthly Schedule</label>
+                        <select id="filter-month" onchange="applyFilters()" class="bg-slate-50 border border-slate-300 text-xs font-bold rounded p-2">
+                            <option value="ALL">All Months</option>
+                            <option value="01">January</option>
+                            <option value="02">February</option>
+                            <option value="03">March</option>
+                            <option value="04">April</option>
+                            <option value="05">May</option>
+                            <option value="06">June</option>
+                            <option value="07">July</option>
+                            <option value="08">August</option>
+                            <option value="09">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
                         </select>
                     </div>
                     <div>
@@ -188,7 +207,6 @@
                 <button onclick="closePlannerReport()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
             </div>
 
-            <!-- SUMMARY BREAKDOWN TABLE -->
             <div class="overflow-x-auto">
                 <table class="w-full text-xs text-left border border-slate-200">
                     <thead class="bg-slate-800 text-white font-bold">
@@ -220,7 +238,6 @@
 
     <!-- JAVASCRIPT ENGINE -->
     <script>
-    // --- 1. PRE-APPROVED ACCOUNTS WHITELIST ---
     const ALLOWED_EMAILS = [
         '@petronetmhbl.com',
         'pmhblmaintenance@gmail.com',
@@ -239,7 +256,6 @@
         });
     }
 
-    // --- 2. LOCAL AUTHENTICATION SECURITY ---
     const DEFAULT_USER = "admin";
     const DEFAULT_PASS = "admin123";
 
@@ -291,7 +307,7 @@
         alert("✅ Password successfully updated!");
     }
 
-    // --- 3. DATE PARSER & FORMATTER ---
+    // --- DATE & MONTH PARSER (CONVERTS SCHEDULED DATE TO MONTH & YEAR) ---
     function parseSapDate(val) {
         if (!val || val === '-' || val === 'Pending') return null;
 
@@ -337,17 +353,26 @@
         return val.toString();
     }
 
-    function getYearFromDate(dateStr) {
+    // EXTRACT 2-DIGIT MONTH (e.g. "01", "02") DIRECTLY FROM SCHEDULED DATE
+    function extractMonthFromDate(dateStr) {
+        const formatted = parseSapDate(dateStr);
+        if (!formatted || formatted === '-') return '';
+        const parts = formatted.split('/');
+        return parts.length === 3 ? parts[1] : '';
+    }
+
+    // EXTRACT 4-DIGIT YEAR DIRECTLY FROM SCHEDULED DATE
+    function extractYearFromDate(dateStr) {
         const formatted = parseSapDate(dateStr);
         if (!formatted || formatted === '-') return '';
         const parts = formatted.split('/');
         return parts.length === 3 ? parts[2] : '';
     }
 
-    // --- 4. GOOGLE DRIVE SYNC ENGINE + V3 USERINFO PARSER ---
+    // --- GOOGLE DRIVE ENGINE ---
     const CLIENT_ID = '649866247792-copqg0ntuau4lpj742u7bq3ujdpfmb40.apps.googleusercontent.com';
     const FILE_ID = '1SKWW9Rp7YcJkT6cJ6tnmADdt7OEnYYNQ';
-    const SCOPES = 'https://www.googleapis.com/auth/drive email profile';
+    const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly email profile';
     let tokenClient;
 
     function gisLoaded() {
@@ -362,7 +387,6 @@
                 }
 
                 try {
-                    // FETCH USER DETAILS VIA GOOGLE OPENID V3 USERINFO
                     const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
                         headers: { 'Authorization': `Bearer ${response.access_token}` }
                     });
@@ -460,18 +484,27 @@
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             });
 
-            if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+            if (!response.ok) {
+                const errJson = await response.json().catch(() => ({}));
+                throw new Error(errJson.error?.message || `HTTP ${response.status}`);
+            }
 
             const jsonContent = await response.json();
             
             if (Array.isArray(jsonContent)) {
                 database.clear();
-                jsonContent.forEach(item => database.set(item.orderNo, item));
+                jsonContent.forEach(item => {
+                    // Auto-fix missing month/year properties if older DB format
+                    if (!item.month) item.month = extractMonthFromDate(item.plannedDate);
+                    if (!item.year) item.year = extractYearFromDate(item.plannedDate);
+                    database.set(item.orderNo, item);
+                });
                 applyFilters();
                 console.log("Database successfully loaded from Google Drive!");
             }
         } catch (err) {
             console.error("Error fetching database from Drive:", err);
+            alert(`⚠️ Warning: Could not download latest Drive data.\n\nDetails: ${err.message}`);
         }
     }
 
@@ -483,35 +516,32 @@
         }
 
         const updatedData = JSON.stringify(Array.from(database.values()), null, 2);
-        const blob = new Blob([updatedData], { type: 'application/json' });
-
-        const metadata = {
-            name: 'pmhbl_database.json',
-            mimeType: 'application/json'
-        };
-
-        const form = new FormData();
-        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-        form.append('file', blob);
 
         try {
-            const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${FILE_ID}?uploadType=multipart`, {
+            const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${FILE_ID}?uploadType=media`, {
                 method: 'PATCH',
-                headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
-                body: form
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: updatedData
             });
+
             if (res.ok) {
                 alert("✅ Database updated and saved permanently to Google Drive!");
             } else {
-                throw new Error("Save request failed");
+                const errData = await res.json().catch(() => ({}));
+                console.error("Google Drive API Save Error:", errData);
+                const errorMsg = errData.error?.message || `Status Code ${res.status}`;
+                alert(`❌ Failed to save updates to Google Drive.\n\nReason: ${errorMsg}`);
             }
         } catch (err) {
-            console.error("Update failed:", err);
-            alert("❌ Failed to save updates to Google Drive.");
+            console.error("Update failed with network error:", err);
+            alert(`❌ Network error while connecting to Google Drive.\n\nDetails: ${err.message}`);
         }
     }
 
-    // --- 5. DASHBOARD DATA & FILTER LOGIC ---
+    // --- DASHBOARD DATA & FILTER LOGIC ---
     let database = new Map();
     let filteredData = [];
     let stationChartObj = null;
@@ -545,11 +575,15 @@
             rows.forEach(row => {
                 const orderNo = strVal(row['Order']);
                 const rawCompDate = row['Completion date'];
-                const rawSchedDate = row['Scheduled start date'] || row['Planned date'];
+                const rawSchedDate = row['Scheduled start date'] || row['Planned date'] || row['Scheduled date'];
 
                 const compDate = parseSapDate(rawCompDate);
                 const schedDate = parseSapDate(rawSchedDate);
                 
+                // EXTRACT MONTH & YEAR FROM THE SCHEDULED DATE
+                const extractedMonth = extractMonthFromDate(schedDate);
+                const extractedYear = extractYearFromDate(schedDate);
+
                 if (!orderNo) return;
 
                 if (database.has(orderNo)) {
@@ -567,6 +601,8 @@
                         equipment: row['Description of technical object'] || row['Equipment'],
                         taskType: typeMap[row['Order Type']] || row['Order Type'],
                         plannedDate: schedDate,
+                        month: extractedMonth, // Extracted Month Code (01-12)
+                        year: extractedYear,   // Extracted Year
                         actualDoneDate: compDate,
                         status: compDate ? 'COMPLETED' : 'PENDING'
                     });
@@ -589,6 +625,7 @@
         const st = document.getElementById('filter-station').value;
         const tp = document.getElementById('filter-type').value;
         const stat = document.getElementById('filter-status').value;
+        const mn = document.getElementById('filter-month').value;
         const yr = document.getElementById('filter-year').value;
 
         const allTasks = Array.from(database.values());
@@ -596,10 +633,28 @@
         filteredData = allTasks.filter(d => {
             const matchStation = (st === 'ALL' || d.station === st);
             const matchType = (tp === 'ALL' || d.taskType === tp);
-            const matchStatus = (stat === 'ALL' || d.status === stat);
-            const taskYear = getYearFromDate(d.plannedDate);
+            
+            // Status Filtering
+            let matchStatus = true;
+            if (stat === 'PM_PENDING') {
+                matchStatus = (d.taskType === 'Preventive Maintenance' && d.status === 'PENDING');
+            } else if (stat === 'PM_COMPLETED') {
+                matchStatus = (d.taskType === 'Preventive Maintenance' && d.status === 'COMPLETED');
+            } else if (stat === 'COMPLETED') {
+                matchStatus = (d.status === 'COMPLETED');
+            } else if (stat === 'PENDING') {
+                matchStatus = (d.status === 'PENDING');
+            }
+
+            // Month Extracted From Scheduled Date
+            const taskMonth = d.month || extractMonthFromDate(d.plannedDate);
+            const matchMonth = (mn === 'ALL' || taskMonth === mn);
+
+            // Year Extracted From Scheduled Date
+            const taskYear = d.year || extractYearFromDate(d.plannedDate);
             const matchYear = (yr === 'ALL' || taskYear === yr);
-            return matchStation && matchType && matchStatus && matchYear;
+
+            return matchStation && matchType && matchStatus && matchMonth && matchYear;
         });
 
         renderDashboard();
@@ -629,7 +684,7 @@
                 <td class="p-3 font-bold text-slate-700">${row.station}</td>
                 <td class="p-3 font-medium text-slate-800">${row.equipment}</td>
                 <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${row.taskType === 'Calibration' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${row.taskType}</span></td>
-                <td class="p-3">${formattedSched}</td>
+                <td class="p-3 font-medium text-slate-700">${formattedSched}</td>
                 <td class="p-3 font-semibold ${formattedComp ? 'text-emerald-600' : 'text-slate-400'}">${formattedComp || 'Pending'}</td>
                 <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${row.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">${row.status}</span></td>
             `;
@@ -720,7 +775,6 @@
         XLSX.writeFile(wb, "Maintenance_Planner_Executed_vs_Pending_Report.xlsx");
     }
 
-    // --- 6. EXPORT FILTERED EXCEL WITH DETAILED KPIS ---
     function exportFilteredExcel() {
         const totalPlanned = filteredData.length;
         const executedTasks = filteredData.filter(d => d.status === 'COMPLETED').length;
@@ -729,7 +783,7 @@
 
         const yearlyStatsMap = {};
         filteredData.forEach(item => {
-            const yr = getYearFromDate(item.plannedDate) || 'Unknown Year';
+            const yr = extractYearFromDate(item.plannedDate) || 'Unknown Year';
             if (!yearlyStatsMap[yr]) {
                 yearlyStatsMap[yr] = { total: 0, executed: 0, pending: 0 };
             }
