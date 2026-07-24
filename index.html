@@ -10,7 +10,7 @@
 </head>
 <body class="bg-slate-100 font-sans text-slate-800 min-h-screen flex flex-col">
 
-    <!-- LOGIN OVERLAY -->
+    <!-- LOGIN OVERLAY (App-Level Credentials) -->
     <div id="loginOverlay" class="fixed inset-0 bg-slate-900 bg-opacity-95 z-[100] flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full border border-slate-200">
             <div class="text-center mb-6">
@@ -53,6 +53,11 @@
                 <div class="flex items-center space-x-2">
                     <button id="authorize_button" onclick="handleAuthClick()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition">
                         🔑 Sign In to Google Drive
+                    </button>
+
+                    <!-- LOGOUT BUTTON -->
+                    <button id="logout_button" onclick="handleLogout()" class="bg-rose-600 hover:bg-rose-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition hidden">
+                        🚪 Logout
                     </button>
 
                     <button onclick="promptChangePassword()" class="bg-slate-700 hover:bg-slate-800 text-white text-xs px-3 py-2 rounded font-bold shadow transition">
@@ -110,8 +115,8 @@
                     </div>
                 </div>
                 
-                <button onclick="exportFilteredExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-4 py-2 rounded font-bold shadow">
-                    📊 Export Filtered Excel
+                <button onclick="exportFilteredExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-4 py-2 rounded font-bold shadow flex items-center space-x-1">
+                    <span>📊 Export Filtered Excel</span>
                 </button>
             </div>
 
@@ -215,7 +220,26 @@
 
     <!-- JAVASCRIPT ENGINE -->
     <script>
-    // --- 1. LOCAL AUTHENTICATION SECURITY ---
+    // --- 1. PRE-APPROVED ACCOUNTS WHITELIST ---
+    const ALLOWED_EMAILS = [
+        '@petronetmhbl.com',
+        'pmhblmaintenance@gmail.com',
+        'praveenkmalali@gmail.com'
+    ];
+
+    function isEmailApproved(email) {
+        if (!email) return false;
+        const normalized = email.trim().toLowerCase();
+        return ALLOWED_EMAILS.some(rule => {
+            const ruleNorm = rule.trim().toLowerCase();
+            if (ruleNorm.startsWith('@')) {
+                return normalized.endsWith(ruleNorm);
+            }
+            return normalized === ruleNorm;
+        });
+    }
+
+    // --- 2. LOCAL AUTHENTICATION SECURITY ---
     const DEFAULT_USER = "admin";
     const DEFAULT_PASS = "admin123";
 
@@ -267,13 +291,12 @@
         alert("✅ Password successfully updated!");
     }
 
-    // --- 2. DATE PARSER & FORMATTER (Converts Excel Serials to DD/MM/YYYY) ---
+    // --- 3. DATE PARSER & FORMATTER (Converts Excel Serials to DD/MM/YYYY) ---
     function parseSapDate(val) {
         if (!val || val === '-' || val === 'Pending') return null;
 
         let d = null;
         
-        // Handle Excel Serial Numbers (e.g. 44125)
         if (typeof val === 'number' || (!isNaN(val) && !isNaN(parseFloat(val)) && !val.toString().includes('-') && !val.toString().includes('/'))) {
             const serial = parseFloat(val);
             if (serial > 20000 && serial < 60000) { 
@@ -281,12 +304,10 @@
             }
         }
 
-        // Handle Date Object
         if (!d && val instanceof Date) {
             d = val;
         }
 
-        // Handle Strings
         if (!d && typeof val === 'string') {
             let s = val.trim();
             if (s.includes('T')) s = s.split('T')[0];
@@ -323,9 +344,10 @@
         return parts.length === 3 ? parts[2] : '';
     }
 
-    // --- 3. GOOGLE DRIVE SYNC ENGINE ---
+    // --- 4. GOOGLE DRIVE SYNC ENGINE + WHITELIST CHECK + LOGOUT ---
     const CLIENT_ID = '649866247792-copqg0ntuau4lpj742u7bq3ujdpfmb40.apps.googleusercontent.com';
     const FILE_ID = '1SKWW9Rp7YcJkT6cJ6tnmADdt7OEnYYNQ';
+    // FIXED: Standard OpenID Scopes (Fixes Error 400: invalid_request)
     const SCOPES = 'https://www.googleapis.com/auth/drive';
     let tokenClient;
 
@@ -333,21 +355,48 @@
         tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: CLIENT_ID,
             scope: SCOPES,
-            callback: (response) => {
+            callback: async (response) => {
                 if (response.error) {
                     console.error("Auth error:", response);
                     alert("Authentication Failed: " + response.error);
                     return;
                 }
-                sessionStorage.setItem('gdrive_token', response.access_token);
-                updateAuthStatus(true);
-                fetchDatabaseFromDrive(response.access_token);
+
+                try {
+                    // Fetch profile email using v2 endpoint
+                    const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                        headers: { 'Authorization': `Bearer ${response.access_token}` }
+                    });
+                    const userInfo = await userRes.json();
+                    const userEmail = userInfo.email ? userInfo.email.toLowerCase() : '';
+
+                    if (!isEmailApproved(userEmail)) {
+                        alert(`❌ Access Denied!\n\nThe Google Account (${userEmail}) is not authorized to access this portal.`);
+                        
+                        google.accounts.oauth2.revoke(response.access_token, () => {
+                            sessionStorage.removeItem('gdrive_token');
+                            sessionStorage.removeItem('gdrive_user_email');
+                            updateAuthStatus(false);
+                        });
+                        return;
+                    }
+
+                    sessionStorage.setItem('gdrive_token', response.access_token);
+                    sessionStorage.setItem('gdrive_user_email', userEmail);
+                    updateAuthStatus(true, userEmail);
+                    fetchDatabaseFromDrive(response.access_token);
+
+                } catch (err) {
+                    console.error("User validation error:", err);
+                    alert("⚠️ Unable to verify Google Account authorization.");
+                }
             },
         });
 
         const savedToken = sessionStorage.getItem('gdrive_token');
+        const savedEmail = sessionStorage.getItem('gdrive_user_email');
         if (savedToken) {
-            updateAuthStatus(true);
+            updateAuthStatus(true, savedEmail);
             fetchDatabaseFromDrive(savedToken);
         }
     }
@@ -357,19 +406,48 @@
             alert("Google Authentication library is still loading. Please wait 3 seconds and try again.");
             return;
         }
-        tokenClient.requestAccessToken({ prompt: '' });
+
+        const existingToken = sessionStorage.getItem('gdrive_token');
+        if (existingToken) {
+            google.accounts.oauth2.revoke(existingToken, () => {
+                sessionStorage.removeItem('gdrive_token');
+                sessionStorage.removeItem('gdrive_user_email');
+                updateAuthStatus(false);
+                tokenClient.requestAccessToken({ prompt: 'select_account' });
+            });
+        } else {
+            tokenClient.requestAccessToken({ prompt: 'select_account' });
+        }
     }
 
-    function updateAuthStatus(isConnected) {
-        const btn = document.getElementById('authorize_button');
-        if (btn) {
-            if (isConnected) {
-                btn.innerText = '✅ Connected to Drive';
-                btn.className = 'bg-emerald-600 text-white text-xs px-3 py-2 rounded font-bold shadow transition';
-            } else {
-                btn.innerText = '🔑 Sign In to Google Drive';
-                btn.className = 'bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition';
-            }
+    function handleLogout() {
+        const existingToken = sessionStorage.getItem('gdrive_token');
+        if (existingToken) {
+            google.accounts.oauth2.revoke(existingToken, () => {
+                sessionStorage.removeItem('gdrive_token');
+                sessionStorage.removeItem('gdrive_user_email');
+                updateAuthStatus(false);
+                alert("🚪 Logged out successfully.");
+            });
+        } else {
+            sessionStorage.removeItem('gdrive_token');
+            sessionStorage.removeItem('gdrive_user_email');
+            updateAuthStatus(false);
+        }
+    }
+
+    function updateAuthStatus(isConnected, userEmail = '') {
+        const btnAuth = document.getElementById('authorize_button');
+        const btnLogout = document.getElementById('logout_button');
+
+        if (isConnected) {
+            btnAuth.innerText = userEmail ? `✅ ${userEmail}` : '✅ Connected to Drive';
+            btnAuth.className = 'bg-emerald-600 text-white text-xs px-3 py-2 rounded font-bold shadow transition';
+            btnLogout.classList.remove('hidden');
+        } else {
+            btnAuth.innerText = '🔑 Sign In to Google Drive';
+            btnAuth.className = 'bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition';
+            btnLogout.classList.add('hidden');
         }
     }
 
@@ -433,7 +511,7 @@
         }
     }
 
-    // --- 4. DASHBOARD DATA & FILTER LOGIC ---
+    // --- 5. DASHBOARD DATA & FILTER LOGIC ---
     let database = new Map();
     let filteredData = [];
     let stationChartObj = null;
@@ -642,15 +720,74 @@
         XLSX.writeFile(wb, "Maintenance_Planner_Executed_vs_Pending_Report.xlsx");
     }
 
+    // --- 6. EXPORT FILTERED EXCEL WITH DETAILED KPIS & YEARLY COMPLIANCE ---
     function exportFilteredExcel() {
-        const formattedExport = filteredData.map(item => ({
-            ...item,
-            plannedDate: parseSapDate(item.plannedDate),
-            actualDoneDate: parseSapDate(item.actualDoneDate) || 'Pending'
+        const totalPlanned = filteredData.length;
+        const executedTasks = filteredData.filter(d => d.status === 'COMPLETED').length;
+        const pendingTasks = totalPlanned - executedTasks;
+        const overallCompliance = totalPlanned > 0 ? ((executedTasks / totalPlanned) * 100).toFixed(2) + '%' : '0.00%';
+
+        const yearlyStatsMap = {};
+        filteredData.forEach(item => {
+            const yr = getYearFromDate(item.plannedDate) || 'Unknown Year';
+            if (!yearlyStatsMap[yr]) {
+                yearlyStatsMap[yr] = { total: 0, executed: 0, pending: 0 };
+            }
+            yearlyStatsMap[yr].total += 1;
+            if (item.status === 'COMPLETED') {
+                yearlyStatsMap[yr].executed += 1;
+            } else {
+                yearlyStatsMap[yr].pending += 1;
+            }
+        });
+
+        const yearlyRows = Object.keys(yearlyStatsMap).sort().map(yr => {
+            const t = yearlyStatsMap[yr].total;
+            const e = yearlyStatsMap[yr].executed;
+            const p = yearlyStatsMap[yr].pending;
+            const c = t > 0 ? ((e / t) * 100).toFixed(2) + '%' : '0.00%';
+            return {
+                "Year": yr,
+                "Total Planned Tasks": t,
+                "Executed Tasks": e,
+                "Pending Tasks": p,
+                "Execution Compliance": c
+            };
+        });
+
+        const summarySheetData = [
+            ["PMHBL MAINTENANCE EXECUTIVE COMPLIANCE REPORT"],
+            ["Generated Date", new Date().toLocaleDateString()],
+            [],
+            ["OVERALL COMPLIANCE METRICS"],
+            ["Metric Name", "Value"],
+            ["Total Planned Tasks", totalPlanned],
+            ["Executed Tasks", executedTasks],
+            ["Pending Tasks", pendingTasks],
+            ["Execution Compliance", overallCompliance],
+            [],
+            ["YEARLY EXECUTION COMPLIANCE BREAKDOWN"]
+        ];
+
+        const summaryWs = XLSX.utils.aoa_to_sheet(summarySheetData);
+        XLSX.utils.sheet_add_json(summaryWs, yearlyRows, { origin: "A12" });
+
+        const taskExportData = filteredData.map(item => ({
+            "Order No": item.orderNo,
+            "Station": item.station,
+            "Equipment Description": item.equipment,
+            "Activity Type": item.taskType,
+            "Scheduled Date": parseSapDate(item.plannedDate) || '-',
+            "Completion Date": parseSapDate(item.actualDoneDate) || 'Pending',
+            "Status": item.status
         }));
-        const ws = XLSX.utils.json_to_sheet(formattedExport);
+
+        const tasksWs = XLSX.utils.json_to_sheet(taskExportData);
+
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Filtered_Tasks");
+        XLSX.utils.book_append_sheet(wb, summaryWs, "Executive_Summary");
+        XLSX.utils.book_append_sheet(wb, tasksWs, "Task_Master_Log");
+
         XLSX.writeFile(wb, "PMHBL_Filtered_Maintenance_Report.xlsx");
     }
     </script>
