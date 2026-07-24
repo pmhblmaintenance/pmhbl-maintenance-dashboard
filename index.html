@@ -291,7 +291,7 @@
         alert("✅ Password successfully updated!");
     }
 
-    // --- 3. DATE PARSER & FORMATTER (Converts Excel Serials to DD/MM/YYYY) ---
+    // --- 3. DATE PARSER & FORMATTER ---
     function parseSapDate(val) {
         if (!val || val === '-' || val === 'Pending') return null;
 
@@ -344,11 +344,10 @@
         return parts.length === 3 ? parts[2] : '';
     }
 
-    // --- 4. GOOGLE DRIVE SYNC ENGINE + WHITELIST CHECK + LOGOUT ---
+    // --- 4. GOOGLE DRIVE SYNC ENGINE + V3 USERINFO PARSER ---
     const CLIENT_ID = '649866247792-copqg0ntuau4lpj742u7bq3ujdpfmb40.apps.googleusercontent.com';
     const FILE_ID = '1SKWW9Rp7YcJkT6cJ6tnmADdt7OEnYYNQ';
-    // FIXED: Standard OpenID Scopes (Fixes Error 400: invalid_request)
-    const SCOPES = 'https://www.googleapis.com/auth/drive';
+    const SCOPES = 'https://www.googleapis.com/auth/drive email profile';
     let tokenClient;
 
     function gisLoaded() {
@@ -363,15 +362,16 @@
                 }
 
                 try {
-                    // Fetch profile email using v2 endpoint
-                    const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                    // FETCH USER DETAILS VIA GOOGLE OPENID V3 USERINFO
+                    const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
                         headers: { 'Authorization': `Bearer ${response.access_token}` }
                     });
+                    
                     const userInfo = await userRes.json();
-                    const userEmail = userInfo.email ? userInfo.email.toLowerCase() : '';
+                    const userEmail = (userInfo.email || response.email || '').toLowerCase().trim();
 
-                    if (!isEmailApproved(userEmail)) {
-                        alert(`❌ Access Denied!\n\nThe Google Account (${userEmail}) is not authorized to access this portal.`);
+                    if (!userEmail || !isEmailApproved(userEmail)) {
+                        alert(`❌ Access Denied!\n\nThe Google Account (${userEmail || 'Unknown'}) is not authorized to access this portal.`);
                         
                         google.accounts.oauth2.revoke(response.access_token, () => {
                             sessionStorage.removeItem('gdrive_token');
@@ -403,7 +403,7 @@
 
     function handleAuthClick() {
         if (!tokenClient) {
-            alert("Google Authentication library is still loading. Please wait 3 seconds and try again.");
+            alert("Google Authentication library is still loading. Please wait a moment.");
             return;
         }
 
@@ -720,7 +720,7 @@
         XLSX.writeFile(wb, "Maintenance_Planner_Executed_vs_Pending_Report.xlsx");
     }
 
-    // --- 6. EXPORT FILTERED EXCEL WITH DETAILED KPIS & YEARLY COMPLIANCE ---
+    // --- 6. EXPORT FILTERED EXCEL WITH DETAILED KPIS ---
     function exportFilteredExcel() {
         const totalPlanned = filteredData.length;
         const executedTasks = filteredData.filter(d => d.status === 'COMPLETED').length;
