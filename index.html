@@ -3,1114 +3,486 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PMHBL - Preventive Maintenance & Calibration Portal</title>
+    <title>Maintenance Planner Executed vs Pending Report</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <!-- ExcelJS library for styled Excel exports -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 </head>
-<body class="bg-slate-100 font-sans text-slate-800 min-h-screen flex flex-col">
+<body class="bg-slate-50 text-slate-800 min-h-screen">
 
-    <!-- LOGIN OVERLAY -->
-    <div id="loginOverlay" class="fixed inset-0 bg-slate-900 bg-opacity-95 z-[100] flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full border border-slate-200">
-            <div class="text-center mb-6">
-                <div class="inline-block bg-orange-500 text-white font-black px-4 py-2 rounded text-2xl mb-2">PMHBL</div>
-                <h2 class="text-xl font-bold text-slate-800">Planner Dashboard Access</h2>
-                <p class="text-xs text-slate-500 mt-1">Please enter credentials to access management tools</p>
+    <!-- TOP HEADER BAR -->
+    <header class="bg-slate-900 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-indigo-600 rounded-lg">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight">PETRONET MHB LIMITED</h1>
+                    <p class="text-xs text-slate-400">Mangalore Bangalore Pipeline - Maintenance Planner</p>
+                </div>
             </div>
-
-            <form onsubmit="handleLogin(event)" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Username</label>
-                    <input type="text" id="loginUsername" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm text-slate-800" placeholder="Enter username">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Password</label>
-                    <input type="password" id="loginPassword" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm text-slate-800" placeholder="Enter password">
-                </div>
-                <p id="loginError" class="text-xs text-red-600 font-bold hidden text-center">❌ Invalid username or password</p>
-                <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-lg shadow transition text-sm">
-                    🔓 Log In
+            <div id="auth-container" class="flex items-center space-x-4">
+                <button id="planner-btn" onclick="openPlannerReport()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium shadow transition text-sm flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                    Planner Executive Report
                 </button>
-            </form>
+            </div>
         </div>
-    </div>
+    </header>
 
-    <!-- MAIN APP WRAPPER -->
-    <div id="app" class="flex flex-col min-h-screen">
-        <!-- HEADER BAR -->
-        <header class="bg-slate-900 text-white shadow-lg sticky top-0 z-50">
-            <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-                <div class="flex items-center space-x-3">
-                    <div class="bg-orange-500 text-white font-black px-3 py-1 rounded text-xl">PMHBL</div>
-                    <div>
-                        <h1 class="text-base font-bold leading-tight">Petronet MHB Limited</h1>
-                        <p class="text-xs text-slate-400">SAP Preventive Maintenance & Calibration Management</p>
-                    </div>
+    <!-- MAIN CONTAINER -->
+    <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+        <!-- METRIC SUMMARY CARDS -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                <div class="p-3 bg-blue-50 text-blue-600 rounded-lg">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
                 </div>
-                
-                <!-- ACTION BUTTONS -->
-                <div class="flex items-center space-x-2">
-                    <button id="authorize_button" onclick="handleAuthClick()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition">
-                        🔑 Sign In to Google Drive
+                <div>
+                    <p class="text-xs text-slate-500 font-medium uppercase tracking-wider">Total Planned</p>
+                    <h3 id="stat-total" class="text-2xl font-bold text-slate-800">0</h3>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                <div class="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-500 font-medium uppercase tracking-wider">Executed Tasks</p>
+                    <h3 id="stat-executed" class="text-2xl font-bold text-emerald-600">0</h3>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                <div class="p-3 bg-amber-50 text-amber-600 rounded-lg">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-500 font-medium uppercase tracking-wider">Pending Tasks</p>
+                    <h3 id="stat-pending" class="text-2xl font-bold text-amber-600">0</h3>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                <div class="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-xs text-slate-500 font-medium uppercase tracking-wider">Compliance Rate</p>
+                    <h3 id="stat-compliance" class="text-2xl font-bold text-indigo-600">0%</h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONTROL PANEL & FILTERS -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
+            <div class="flex flex-wrap gap-4 items-center justify-between border-b pb-4">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-slate-700">Filters:</span>
+                    <select id="filter-station" onchange="applyFilters()" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="ALL">All Stations</option>
+                        <option value="Mangalore">Mangalore</option>
+                        <option value="Neriya">Neriya</option>
+                        <option value="Hassan">Hassan</option>
+                        <option value="DKN">DKN</option>
+                    </select>
+
+                    <select id="filter-tasktype" onchange="applyFilters()" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="ALL">All Task Types</option>
+                        <option value="Preventive Maintenance">Preventive Maintenance</option>
+                        <option value="Calibration">Calibration</option>
+                    </select>
+
+                    <select id="filter-status" onchange="applyFilters()" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="ALL">All Statuses</option>
+                        <option value="COMPLETED">Completed</option>
+                        <option value="PENDING">Pending</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button onclick="exportFilteredExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium shadow transition flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Export Filtered Excel
                     </button>
-
-                    <button id="logout_button" onclick="handleLogout()" class="bg-rose-600 hover:bg-rose-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition hidden">
-                        🚪 Logout
-                    </button>
-
-                    <button onclick="promptChangePassword()" class="bg-slate-700 hover:bg-slate-800 text-white text-xs px-3 py-2 rounded font-bold shadow transition">
-                        ⚙️ Password
-                    </button>
-
-                    <input type="file" id="sap-file-input" accept=".xlsx, .xls" class="hidden" onchange="mergeMonthlySapFile(this)">
-                    
-                    <button onclick="document.getElementById('sap-file-input').click()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition flex items-center space-x-1">
-                        <span>🔄 Upload Monthly SAP Export</span>
-                    </button>
-                    
-                    <button onclick="generatePlannerReport()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition flex items-center space-x-1">
-                        <span>📋 Maintenance Planner Report</span>
-                    </button>
                 </div>
             </div>
-        </header>
+        </div>
 
-        <main class="max-w-7xl mx-auto px-4 py-6 w-full space-y-6 flex-grow">
-            <!-- TOP FILTER BAR -->
-            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center justify-between">
-                <div class="flex flex-wrap gap-3 items-center">
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase">Station</label>
-                        <select id="filter-station" onchange="applyFilters()" class="bg-slate-50 border border-slate-300 text-xs font-bold rounded p-2">
-                            <option value="ALL">All Stations</option>
-                            <option value="Mangalore">Mangalore (PT02)</option>
-                            <option value="Neriya">Neriya (PT03)</option>
-                            <option value="Hassan">Hassan (PT04)</option>
-                            <option value="DKN">DKN (PT05)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase">Activity Type</label>
-                        <select id="filter-type" onchange="applyFilters()" class="bg-slate-50 border border-slate-300 text-xs font-bold rounded p-2">
-                            <option value="ALL">All Activities</option>
-                            <option value="Preventive Maintenance">Preventive Maintenance (PM02)</option>
-                            <option value="Calibration">Calibration (PM05)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase">Status & Schedule</label>
-                        <select id="filter-status" onchange="applyFilters()" class="bg-slate-50 border border-slate-300 text-xs font-bold rounded p-2">
-                            <option value="ALL">All Status</option>
-                            <option value="PM_PENDING">Pending Preventive Maintenance (PM02)</option>
-                            <option value="PM_COMPLETED">Executed Preventive Maintenance (PM02)</option>
-                            <option value="COMPLETED">All Executed Work</option>
-                            <option value="PENDING">All Pending Work</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase">Monthly Schedule</label>
-                        <select id="filter-month" onchange="applyFilters()" class="bg-slate-50 border border-slate-300 text-xs font-bold rounded p-2">
-                            <option value="ALL">All Months</option>
-                            <option value="01">January</option>
-                            <option value="02">February</option>
-                            <option value="03">March</option>
-                            <option value="04">April</option>
-                            <option value="05">May</option>
-                            <option value="06">June</option>
-                            <option value="07">July</option>
-                            <option value="08">August</option>
-                            <option value="09">September</option>
-                            <option value="10">October</option>
-                            <option value="11">November</option>
-                            <option value="12">December</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase">Year</label>
-                        <select id="filter-year" onchange="applyFilters()" class="bg-slate-50 border border-slate-300 text-xs font-bold rounded p-2">
-                            <option value="ALL">All Years</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <button onclick="exportFilteredExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-4 py-2 rounded font-bold shadow flex items-center space-x-1">
-                    <span>📊 Export Filtered Excel</span>
-                </button>
-            </div>
-
-            <!-- KPI CARDS -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                    <span class="text-xs font-bold text-slate-400 uppercase">Total Planned Tasks</span>
-                    <span id="kpi-total" class="text-3xl font-black text-slate-800 block mt-1">0</span>
-                </div>
-                <div class="bg-emerald-50 p-5 rounded-xl border border-emerald-200 shadow-sm">
-                    <span class="text-xs font-bold text-emerald-700 uppercase">Executed Tasks</span>
-                    <span id="kpi-completed" class="text-3xl font-black text-emerald-800 block mt-1">0</span>
-                </div>
-                <div class="bg-amber-50 p-5 rounded-xl border border-amber-200 shadow-sm">
-                    <span class="text-xs font-bold text-amber-700 uppercase">Pending Tasks</span>
-                    <span id="kpi-pending" class="text-3xl font-black text-amber-800 block mt-1">0</span>
-                </div>
-                <div class="bg-blue-50 p-5 rounded-xl border border-blue-200 shadow-sm">
-                    <span class="text-xs font-bold text-blue-700 uppercase">Execution Compliance</span>
-                    <span id="kpi-compliance" class="text-3xl font-black text-blue-800 block mt-1">0%</span>
-                </div>
-            </div>
-
-            <!-- CHARTS SECTION -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                    <h3 class="text-sm font-bold text-slate-700 mb-4">Executed vs Pending by Station</h3>
-                    <div class="h-64"><canvas id="chart-station"></canvas></div>
-                </div>
-                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                    <h3 class="text-sm font-bold text-slate-700 mb-4">Maintenance vs Calibration Compliance</h3>
-                    <div class="h-64"><canvas id="chart-type"></canvas></div>
-                </div>
-            </div>
-
-            <!-- DATA MATRIX -->
-            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div class="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                    <h3 class="text-sm font-bold text-slate-700">SAP Maintenance Master Log</h3>
-                    <span id="record-count" class="text-xs font-bold bg-slate-200 px-2 py-1 rounded">0 records</span>
-                </div>
-                <div class="overflow-x-auto max-h-96">
-                    <table class="w-full text-left border-collapse text-xs">
-                        <thead class="bg-slate-100 sticky top-0 font-bold text-slate-600">
-                            <tr>
-                                <th class="p-3 border-b">Order No</th>
-                                <th class="p-3 border-b">Station</th>
-                                <th class="p-3 border-b">Equipment Description</th>
-                                <th class="p-3 border-b">Type</th>
-                                <th class="p-3 border-b">Scheduled Date</th>
-                                <th class="p-3 border-b">Completion Date</th>
-                                <th class="p-3 border-b">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="table-body" class="divide-y divide-slate-200">
-                            <!-- Dynamic Rows -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </main>
-    </div>
-
-    <!-- MODAL: MAINTENANCE PLANNER REPORT -->
-    <div id="planner-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center hidden z-50">
-        <div class="bg-white rounded-xl max-w-4xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center border-b pb-3">
-                <h2 class="text-lg font-bold text-slate-800">📋 Maintenance Planner Executive Report</h2>
-                <button onclick="closePlannerReport()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
-            </div>
-
-            <div class="overflow-x-auto">
-                <table class="w-full text-xs text-left border border-slate-200">
-                    <thead class="bg-slate-800 text-white font-bold">
+        <!-- DATA TABLE -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="overflow-x-auto max-h-[500px]">
+                <table class="w-full text-left text-sm text-slate-600">
+                    <thead class="bg-slate-100 text-slate-700 uppercase text-xs font-semibold sticky top-0 border-b">
                         <tr>
+                            <th class="px-4 py-3">Station</th>
+                            <th class="px-4 py-3">Equipment ID</th>
+                            <th class="px-4 py-3">Task Name</th>
+                            <th class="px-4 py-3">Task Type</th>
+                            <th class="px-4 py-3">Planned Date</th>
+                            <th class="px-4 py-3">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="report-table-body" class="divide-y divide-slate-200">
+                        <!-- Dynamic Rows -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- EXECUTIVE REPORT MODAL -->
+    <div id="planner-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="p-5 bg-slate-900 text-white flex justify-between items-center">
+                <div>
+                    <h2 class="text-lg font-bold">PETRONET MHB LIMITED</h2>
+                    <p class="text-xs text-slate-400">Maintenance Planner Executed vs Pending Executive Summary</p>
+                </div>
+                <button onclick="closePlannerReport()" class="text-slate-400 hover:text-white text-xl font-bold">&times;</button>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-4">
+                <table class="w-full text-sm border-collapse border border-slate-300">
+                    <thead>
+                        <tr class="bg-slate-800 text-white font-semibold">
                             <th class="p-2 border">Station</th>
-                            <th class="p-2 border">Activity Type</th>
-                            <th class="p-2 border text-center">Planned Tasks</th>
+                            <th class="p-2 border">Task Type</th>
+                            <th class="p-2 border text-center">Total</th>
                             <th class="p-2 border text-center">Executed</th>
                             <th class="p-2 border text-center">Pending</th>
-                            <th class="p-2 border text-center">Compliance Rate</th>
+                            <th class="p-2 border text-center">Compliance</th>
                         </tr>
                     </thead>
                     <tbody id="planner-report-body" class="divide-y divide-slate-200">
-                        <!-- Rendered by JS -->
+                        <!-- Dynamic Planner Summary Rows -->
                     </tbody>
                 </table>
             </div>
 
-            <div class="flex justify-end space-x-2 pt-2 border-t">
-                <button onclick="exportPlannerSummaryExcel()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-4 py-2 rounded font-bold">
-                    📥 Download Planner Report (XLSX)
-                </button>
-                <button onclick="closePlannerReport()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-4 py-2 rounded font-bold">
+            <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-3">
+                <button onclick="closePlannerReport()" class="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-100">
                     Close
+                </button>
+                <button onclick="exportPlannerSummaryExcel()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium shadow flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                    </svg>
+                    Download Executed Excel Format
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- JAVASCRIPT ENGINE -->
+    <!-- MAIN SCRIPT LOGIC -->
     <script>
-    const ALLOWED_EMAILS = [
-        'pmhblmaintenance@gmail.com',
-    ];
+        let rawData = [];
+        let filteredData = [];
 
-    function isEmailApproved(email) {
-        if (!email) return false;
-        const normalized = email.trim().toLowerCase();
-        return ALLOWED_EMAILS.some(rule => {
-            const ruleNorm = rule.trim().toLowerCase();
-            if (ruleNorm.startsWith('@')) {
-                return normalized.endsWith(ruleNorm);
-            }
-            return normalized === ruleNorm;
-        });
-    }
-
-    const DEFAULT_USER = "admin";
-    const DEFAULT_PASS = "admin123";
-
-    function getSavedPassword() {
-        return localStorage.getItem('pmhbl_pass') || DEFAULT_PASS;
-    }
-
-    function getSavedUsername() {
-        return localStorage.getItem('pmhbl_user') || DEFAULT_USER;
-    }
-
-    window.addEventListener('DOMContentLoaded', () => {
-        const isLoggedIn = sessionStorage.getItem('pmhbl_logged_in');
-        const overlay = document.getElementById('loginOverlay');
-        if (isLoggedIn === 'true' && overlay) {
-            overlay.classList.add('hidden');
-        }
-    });
-
-    function handleLogin(e) {
-        e.preventDefault();
-        const userIn = document.getElementById('loginUsername').value.trim();
-        const passIn = document.getElementById('loginPassword').value.trim();
-        const errorMsg = document.getElementById('loginError');
-
-        if (userIn === getSavedUsername() && passIn === getSavedPassword()) {
-            sessionStorage.setItem('pmhbl_logged_in', 'true');
-            document.getElementById('loginOverlay').classList.add('hidden');
-            errorMsg.classList.add('hidden');
-        } else {
-            errorMsg.classList.remove('hidden');
-        }
-    }
-
-    function promptChangePassword() {
-        const currentPass = prompt("Enter your CURRENT password:");
-        if (currentPass !== getSavedPassword()) {
-            alert("❌ Incorrect current password!");
-            return;
-        }
-
-        const newPass = prompt("Enter your NEW password:");
-        if (!newPass || newPass.trim() === "") {
-            alert("⚠️ Password cannot be empty!");
-            return;
-        }
-
-        localStorage.setItem('pmhbl_pass', newPass.trim());
-        alert("✅ Password successfully updated!");
-    }
-
-    // --- DATE & MONTH PARSER (CONVERTS SCHEDULED DATE TO MONTH & YEAR) ---
-    function parseSapDate(val) {
-        if (!val || val === '-' || val === 'Pending') return null;
-
-        let d = null;
-        
-        if (typeof val === 'number' || (!isNaN(val) && !isNaN(parseFloat(val)) && !val.toString().includes('-') && !val.toString().includes('/'))) {
-            const serial = parseFloat(val);
-            if (serial > 20000 && serial < 60000) { 
-                d = new Date(Math.round((serial - 25569) * 86400 * 1000));
-            }
-        }
-
-        if (!d && val instanceof Date) {
-            d = val;
-        }
-
-        if (!d && typeof val === 'string') {
-            let s = val.trim();
-            if (s.includes('T')) s = s.split('T')[0];
-
-            if (s.includes('.') || s.includes('/')) {
-                const parts = s.split(/[\.\/]/);
-                if (parts.length === 3) {
-                    if (parts[0].length === 4) {
-                        d = new Date(parts[0], parts[1] - 1, parts[2]);
-                    } else if (parts[2].length === 4) {
-                        d = new Date(parts[2], parts[1] - 1, parts[0]);
-                    }
+        // Helper function to format any incoming date string to DD-MM-YYYY
+        function formatDateToDDMMYYYY(dateStr) {
+            if (!dateStr) return '';
+            
+            // Check for YYYY-MM-DD or YYYY/MM/DD
+            if (dateStr.includes('-') || dateStr.includes('/')) {
+                const parts = dateStr.split(/[-/]/);
+                if (parts[0].length === 4) {
+                    // Formatted as YYYY-MM-DD or YYYY/MM/DD
+                    return `${parts[2].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[0]}`;
+                } else if (parts[2].length === 4) {
+                    // Formatted as DD/MM/YYYY or MM/DD/YYYY
+                    return `${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[2]}`;
                 }
             }
-            if (!d || isNaN(d.getTime())) {
-                d = new Date(s);
+            
+            const dateObj = new Date(dateStr);
+            if (!isNaN(dateObj.getTime())) {
+                const day = String(dateObj.getDate()).padStart(2, '0');
+                const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const year = dateObj.getFullYear();
+                return `${day}-${month}-${year}`;
             }
+            
+            return dateStr;
         }
 
-        if (d && !isNaN(d.getTime())) {
-            const day = String(d.getDate()).padStart(2, '0');
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const year = d.getFullYear();
-            return `${day}/${month}/${year}`;
-        }
+        // Sample initial data generator with updated DD-MM-YYYY date strings
+        function generateSampleData() {
+            const stations = ['Mangalore', 'Neriya', 'Hassan', 'DKN'];
+            const types = ['Preventive Maintenance', 'Calibration'];
+            const data = [];
 
-        return val.toString();
-    }
+            const counts = {
+                'Mangalore': { 'Preventive Maintenance': [6855, 700], 'Calibration': [402, 108] },
+                'Neriya': { 'Preventive Maintenance': [5432, 1255], 'Calibration': [109, 411] },
+                'Hassan': { 'Preventive Maintenance': [3821, 2566], 'Calibration': [25, 372] },
+                'DKN': { 'Preventive Maintenance': [5978, 2838], 'Calibration': [4, 627] }
+            };
 
-    // EXTRACT 2-DIGIT MONTH (e.g. "01", "02") DIRECTLY FROM SCHEDULED DATE
-    function extractMonthFromDate(dateStr) {
-        const formatted = parseSapDate(dateStr);
-        if (!formatted || formatted === '-') return '';
-        const parts = formatted.split('/');
-        return parts.length === 3 ? parts[1] : '';
-    }
-
-    // EXTRACT 4-DIGIT YEAR DIRECTLY FROM SCHEDULED DATE
-    function extractYearFromDate(dateStr) {
-        const formatted = parseSapDate(dateStr);
-        if (!formatted || formatted === '-') return '';
-        const parts = formatted.split('/');
-        return parts.length === 3 ? parts[2] : '';
-    }
-
-    // --- GOOGLE DRIVE ENGINE ---
-    const CLIENT_ID = '649866247792-copqg0ntuau4lpj742u7bq3ujdpfmb40.apps.googleusercontent.com';
-    const FILE_ID = '1SKWW9Rp7YcJkT6cJ6tnmADdt7OEnYYNQ';
-    const SCOPES = 'https://www.googleapis.com/auth/drive email profile';
-    let tokenClient;
-
-    function gisLoaded() {
-        tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID,
-            scope: SCOPES,
-            callback: async (response) => {
-                if (response.error) {
-                    console.error("Auth error:", response);
-                    alert("Authentication Failed: " + response.error);
-                    return;
-                }
-
-                try {
-                    const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                        headers: { 'Authorization': `Bearer ${response.access_token}` }
-                    });
-                    
-                    const userInfo = await userRes.json();
-                    const userEmail = (userInfo.email || response.email || '').toLowerCase().trim();
-
-                    if (!userEmail || !isEmailApproved(userEmail)) {
-                        alert(`❌ Access Denied!\n\nThe Google Account (${userEmail || 'Unknown'}) is not authorized to access this portal.`);
-                        
-                        google.accounts.oauth2.revoke(response.access_token, () => {
-                            sessionStorage.removeItem('gdrive_token');
-                            sessionStorage.removeItem('gdrive_user_email');
-                            updateAuthStatus(false);
+            stations.forEach(st => {
+                types.forEach(tp => {
+                    const [exec, pend] = counts[st][tp];
+                    for (let i = 0; i < exec; i++) {
+                        data.push({ 
+                            station: st, 
+                            equipmentId: `${st.substring(0,3).toUpperCase()}-EQ-${i+100}`, 
+                            taskName: `${tp} Check ${i+1}`, 
+                            taskType: tp, 
+                            plannedDate: '15-06-2026', 
+                            status: 'COMPLETED' 
                         });
-                        return;
                     }
-
-                    sessionStorage.setItem('gdrive_token', response.access_token);
-                    sessionStorage.setItem('gdrive_user_email', userEmail);
-                    updateAuthStatus(true, userEmail);
-                    fetchDatabaseFromDrive(response.access_token);
-
-                } catch (err) {
-                    console.error("User validation error:", err);
-                    alert("⚠️ Unable to verify Google Account authorization.");
-                }
-            },
-        });
-
-        const savedToken = sessionStorage.getItem('gdrive_token');
-        const savedEmail = sessionStorage.getItem('gdrive_user_email');
-        if (savedToken) {
-            updateAuthStatus(true, savedEmail);
-            fetchDatabaseFromDrive(savedToken);
-        }
-    }
-
-    function handleAuthClick() {
-        if (!tokenClient) {
-            alert("Google Authentication library is still loading. Please wait a moment.");
-            return;
-        }
-
-        const existingToken = sessionStorage.getItem('gdrive_token');
-        if (existingToken) {
-            google.accounts.oauth2.revoke(existingToken, () => {
-                sessionStorage.removeItem('gdrive_token');
-                sessionStorage.removeItem('gdrive_user_email');
-                updateAuthStatus(false);
-                tokenClient.requestAccessToken({ prompt: 'select_account' });
-            });
-        } else {
-            tokenClient.requestAccessToken({ prompt: 'select_account' });
-        }
-    }
-
-    function handleLogout() {
-        const existingToken = sessionStorage.getItem('gdrive_token');
-        if (existingToken) {
-            google.accounts.oauth2.revoke(existingToken, () => {
-                sessionStorage.removeItem('gdrive_token');
-                sessionStorage.removeItem('gdrive_user_email');
-                updateAuthStatus(false);
-                alert("🚪 Logged out successfully.");
-            });
-        } else {
-            sessionStorage.removeItem('gdrive_token');
-            sessionStorage.removeItem('gdrive_user_email');
-            updateAuthStatus(false);
-        }
-    }
-
-    function updateAuthStatus(isConnected, userEmail = '') {
-        const btnAuth = document.getElementById('authorize_button');
-        const btnLogout = document.getElementById('logout_button');
-
-        if (isConnected) {
-            btnAuth.innerText = userEmail ? `✅ ${userEmail}` : '✅ Connected to Drive';
-            btnAuth.className = 'bg-emerald-600 text-white text-xs px-3 py-2 rounded font-bold shadow transition';
-            btnLogout.classList.remove('hidden');
-        } else {
-            btnAuth.innerText = '🔑 Sign In to Google Drive';
-            btnAuth.className = 'bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded font-bold shadow transition';
-            btnLogout.classList.add('hidden');
-        }
-    }
-
-    async function fetchDatabaseFromDrive(token) {
-        const accessToken = token || sessionStorage.getItem('gdrive_token');
-        if (!accessToken) return;
-
-        try {
-            const response = await fetch(`https://www.googleapis.com/drive/v3/files/${FILE_ID}?alt=media`, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-
-            if (!response.ok) {
-                const errJson = await response.json().catch(() => ({}));
-                throw new Error(errJson.error?.message || `HTTP ${response.status}`);
-            }
-
-            const jsonContent = await response.json();
-            
-            if (Array.isArray(jsonContent)) {
-                database.clear();
-                jsonContent.forEach(item => {
-                    // Auto-fix missing month/year properties if older DB format
-                    if (!item.month) item.month = extractMonthFromDate(item.plannedDate);
-                    if (!item.year) item.year = extractYearFromDate(item.plannedDate);
-                    database.set(item.orderNo, item);
+                    for (let i = 0; i < pend; i++) {
+                        data.push({ 
+                            station: st, 
+                            equipmentId: `${st.substring(0,3).toUpperCase()}-EQ-${i+8000}`, 
+                            taskName: `${tp} Check ${i+1}`, 
+                            taskType: tp, 
+                            plannedDate: '20-06-2026', 
+                            status: 'PENDING' 
+                        });
+                    }
                 });
-                applyFilters();
-                console.log("Database successfully loaded from Google Drive!");
-            }
-        } catch (err) {
-            console.error("Error fetching database from Drive:", err);
-            alert(`⚠️ Warning: Could not download latest Drive data.\n\nDetails: ${err.message}`);
-        }
-    }
-
-    async function saveDatabaseToDrive() {
-        const accessToken = sessionStorage.getItem('gdrive_token');
-        if (!accessToken) {
-            alert("Please click 'Sign In to Google Drive' first to save updates to the cloud!");
-            return;
-        }
-
-        const updatedData = JSON.stringify(Array.from(database.values()), null, 2);
-
-        try {
-            const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${FILE_ID}?uploadType=media`, {
-                method: 'PATCH',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: updatedData
             });
-
-            if (res.ok) {
-                alert("✅ Database updated and saved permanently to Google Drive!");
-            } else {
-                const errData = await res.json().catch(() => ({}));
-                console.error("Google Drive API Save Error:", errData);
-                const errorMsg = errData.error?.message || `Status Code ${res.status}`;
-                alert(`❌ Failed to save updates to Google Drive.\n\nReason: ${errorMsg}`);
-            }
-        } catch (err) {
-            console.error("Update failed with network error:", err);
-            alert(`❌ Network error while connecting to Google Drive.\n\nDetails: ${err.message}`);
+            return data;
         }
-    }
 
-    // --- DASHBOARD DATA & FILTER LOGIC ---
-    let database = new Map();
-    let filteredData = [];
-    let stationChartObj = null;
-    let typeChartObj = null;
-
-    const yearSelect = document.getElementById('filter-year');
-    for(let y = 2020; y <= 2031; y++) {
-        let opt = document.createElement('option');
-        opt.value = y;
-        opt.textContent = y;
-        yearSelect.appendChild(opt);
-    }
-
-    const plantMap = {'PT02': 'Mangalore', 'PT03': 'Neriya', 'PT04': 'Hassan', 'PT05': 'DKN'};
-    const typeMap = {'PM02': 'Preventive Maintenance', 'PM05': 'Calibration'};
-
-    function mergeMonthlySapFile(input) {
-        const file = input.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, {type: 'array'});
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            const rows = XLSX.utils.sheet_to_json(sheet);
-
-            let updatedCount = 0;
-            let newCount = 0;
-
-            rows.forEach(row => {
-                const orderNo = strVal(row['Order']);
-                const rawCompDate = row['Completion date'];
-                const rawSchedDate = row['Scheduled start date'] || row['Planned date'] || row['Scheduled date'];
-
-                const compDate = parseSapDate(rawCompDate);
-                const schedDate = parseSapDate(rawSchedDate);
-                
-                // EXTRACT MONTH & YEAR FROM THE SCHEDULED DATE
-                const extractedMonth = extractMonthFromDate(schedDate);
-                const extractedYear = extractYearFromDate(schedDate);
-
-                if (!orderNo) return;
-
-                if (database.has(orderNo)) {
-                    let existing = database.get(orderNo);
-                    if ((!existing.actualDoneDate || existing.actualDoneDate === 'Pending') && compDate) {
-                        existing.actualDoneDate = compDate;
-                        existing.status = 'COMPLETED';
-                        updatedCount++;
-                    }
-                } else {
-                    database.set(orderNo, {
-                        orderNo: orderNo,
-                        plantCode: row['Maintenance Plant'],
-                        station: plantMap[row['Maintenance Plant']] || row['Maintenance Plant'],
-                        equipment: row['Description of technical object'] || row['Equipment'],
-                        taskType: typeMap[row['Order Type']] || row['Order Type'],
-                        plannedDate: schedDate,
-                        month: extractedMonth, // Extracted Month Code (01-12)
-                        year: extractedYear,   // Extracted Year
-                        actualDoneDate: compDate,
-                        status: compDate ? 'COMPLETED' : 'PENDING'
-                    });
-                    newCount++;
-                }
-            });
-
-            alert(`SAP Monthly Update Completed!\n\n✅ Updated completion dates: ${updatedCount}\n🆕 New maintenance orders added: ${newCount}`);
-            applyFilters();
-            saveDatabaseToDrive();
+        window.onload = function() {
+            rawData = generateSampleData();
+            filteredData = [...rawData];
+            updateDashboard();
         };
-        reader.readAsArrayBuffer(file);
-    }
 
-    function strVal(v) {
-        return v ? v.toString().trim() : '';
-    }
+        function updateDashboard() {
+            renderTable();
+            updateMetrics();
+        }
 
-    function applyFilters() {
-        const st = document.getElementById('filter-station').value;
-        const tp = document.getElementById('filter-type').value;
-        const stat = document.getElementById('filter-status').value;
-        const mn = document.getElementById('filter-month').value;
-        const yr = document.getElementById('filter-year').value;
-
-        const allTasks = Array.from(database.values());
-
-        filteredData = allTasks.filter(d => {
-            const matchStation = (st === 'ALL' || d.station === st);
-            const matchType = (tp === 'ALL' || d.taskType === tp);
+        function renderTable() {
+            const tbody = document.getElementById('report-table-body');
+            tbody.innerHTML = '';
             
-            // Status Filtering
-            let matchStatus = true;
-            if (stat === 'PM_PENDING') {
-                matchStatus = (d.taskType === 'Preventive Maintenance' && d.status === 'PENDING');
-            } else if (stat === 'PM_COMPLETED') {
-                matchStatus = (d.taskType === 'Preventive Maintenance' && d.status === 'COMPLETED');
-            } else if (stat === 'COMPLETED') {
-                matchStatus = (d.status === 'COMPLETED');
-            } else if (stat === 'PENDING') {
-                matchStatus = (d.status === 'PENDING');
+            const displayLimit = Math.min(filteredData.length, 100);
+            for (let i = 0; i < displayLimit; i++) {
+                const item = filteredData[i];
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 transition';
+                tr.innerHTML = `
+                    <td class="px-4 py-2.5 font-medium text-slate-800">${item.station}</td>
+                    <td class="px-4 py-2.5">${item.equipmentId}</td>
+                    <td class="px-4 py-2.5">${item.taskName}</td>
+                    <td class="px-4 py-2.5">${item.taskType}</td>
+                    <td class="px-4 py-2.5">${formatDateToDDMMYYYY(item.plannedDate)}</td>
+                    <td class="px-4 py-2.5">
+                        <span class="px-2 py-1 rounded-full text-xs font-bold ${item.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
+                            ${item.status}
+                        </span>
+                    </td>
+                `;
+                tbody.appendChild(tr);
             }
-
-            // Month Extracted From Scheduled Date
-            const taskMonth = d.month || extractMonthFromDate(d.plannedDate);
-            const matchMonth = (mn === 'ALL' || taskMonth === mn);
-
-            // Year Extracted From Scheduled Date
-            const taskYear = d.year || extractYearFromDate(d.plannedDate);
-            const matchYear = (yr === 'ALL' || taskYear === yr);
-
-            return matchStation && matchType && matchStatus && matchMonth && matchYear;
-        });
-
-        renderDashboard();
-    }
-
-    function renderDashboard() {
-        const total = filteredData.length;
-        const completed = filteredData.filter(d => d.status === 'COMPLETED').length;
-        const pending = total - completed;
-        const compliance = total > 0 ? ((completed / total) * 100).toFixed(1) : 0;
-
-        document.getElementById('kpi-total').textContent = total.toLocaleString();
-        document.getElementById('kpi-completed').textContent = completed.toLocaleString();
-        document.getElementById('kpi-pending').textContent = pending.toLocaleString();
-        document.getElementById('kpi-compliance').textContent = `${compliance}%`;
-        document.getElementById('record-count').textContent = `${filteredData.length} items`;
-
-        const tbody = document.getElementById('table-body');
-        tbody.innerHTML = '';
-        filteredData.slice(0, 150).forEach(row => {
-            const formattedSched = parseSapDate(row.plannedDate) || '-';
-            const formattedComp = parseSapDate(row.actualDoneDate);
-
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td class="p-3 font-mono font-bold text-slate-700">${row.orderNo}</td>
-                <td class="p-3 font-bold text-slate-700">${row.station}</td>
-                <td class="p-3 font-medium text-slate-800">${row.equipment}</td>
-                <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${row.taskType === 'Calibration' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${row.taskType}</span></td>
-                <td class="p-3 font-medium text-slate-700">${formattedSched}</td>
-                <td class="p-3 font-semibold ${formattedComp ? 'text-emerald-600' : 'text-slate-400'}">${formattedComp || 'Pending'}</td>
-                <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${row.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">${row.status}</span></td>
-            `;
-            tbody.appendChild(tr);
-        });
-
-        renderCharts();
-    }
-
-    function renderCharts() {
-        const stations = ['Mangalore', 'Neriya', 'Hassan', 'DKN'];
-        const completedByStation = stations.map(s => filteredData.filter(d => d.station === s && d.status === 'COMPLETED').length);
-        const pendingByStation = stations.map(s => filteredData.filter(d => d.station === s && d.status === 'PENDING').length);
-
-        if (stationChartObj) stationChartObj.destroy();
-        stationChartObj = new Chart(document.getElementById('chart-station'), {
-            type: 'bar',
-            data: {
-                labels: stations,
-                datasets: [
-                    { label: 'Executed', data: completedByStation, backgroundColor: '#10B981' },
-                    { label: 'Pending', data: pendingByStation, backgroundColor: '#F59E0B' }
-                ]
-            },
-            options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }
-        });
-
-        const pmCount = filteredData.filter(d => d.taskType === 'Preventive Maintenance').length;
-        const calCount = filteredData.filter(d => d.taskType === 'Calibration').length;
-
-        if (typeChartObj) typeChartObj.destroy();
-        typeChartObj = new Chart(document.getElementById('chart-type'), {
-            type: 'doughnut',
-            data: {
-                labels: ['Preventive Maintenance (PM02)', 'Calibration (PM05)'],
-                datasets: [{ data: [pmCount, calCount], backgroundColor: ['#3B82F6', '#A855F7'] }]
-            },
-            options: { responsive: true, maintainAspectRatio: false }
-        });
-    }
-
-    function generatePlannerReport() {
-        const tbody = document.getElementById('planner-report-body');
-        tbody.innerHTML = '';
-
-        const stations = ['Mangalore', 'Neriya', 'Hassan', 'DKN'];
-        const types = ['Preventive Maintenance', 'Calibration'];
-        const summaryRows = [];
-
-        stations.forEach(st => {
-            types.forEach(tp => {
-                const subset = filteredData.filter(d => d.station === st && d.taskType === tp);
-                const total = subset.length;
-                const executed = subset.filter(d => d.status === 'COMPLETED').length;
-                const pending = total - executed;
-                const compliance = total > 0 ? ((executed / total) * 100).toFixed(1) : '0.0';
-
-                if (total > 0) {
-                    summaryRows.push({ station: st, taskType: tp, total, executed, pending, compliance });
-                    
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td class="p-2 border font-bold">${st}</td>
-                        <td class="p-2 border">${tp}</td>
-                        <td class="p-2 border text-center font-bold">${total}</td>
-                        <td class="p-2 border text-center text-emerald-600 font-bold">${executed}</td>
-                        <td class="p-2 border text-center text-amber-600 font-bold">${pending}</td>
-                        <td class="p-2 border text-center font-bold ${compliance >= 90 ? 'text-emerald-600' : 'text-rose-600'}">${compliance}%</td>
-                    `;
-                    tbody.appendChild(tr);
-                }
-            });
-        });
-
-        window.currentPlannerSummary = summaryRows;
-        document.getElementById('planner-modal').classList.remove('hidden');
-    }
-
-    function closePlannerReport() {
-        document.getElementById('planner-modal').classList.add('hidden');
-    }
-
-    // --- UPDATED EXCELJS FORMATTED EXPORT FOR PLANNER REPORT ---
-    async function exportPlannerSummaryExcel() {
-        if (!window.currentPlannerSummary || window.currentPlannerSummary.length === 0) {
-            alert("No summary data available to export.");
-            return;
         }
 
-        const workbook = new ExcelJS.Workbook();
-        workbook.creator = 'PMHBL Dashboard';
+        function updateMetrics() {
+            const total = filteredData.length;
+            const executed = filteredData.filter(d => d.status === 'COMPLETED').length;
+            const pending = total - executed;
+            const compliance = total > 0 ? ((executed / total) * 100).toFixed(1) : '0.0';
 
-        const summarySheet = workbook.addWorksheet('Planner_Summary');
-        summarySheet.views = [{ showGridLines: true }];
-
-        summarySheet.columns = [
-            { key: 'station', width: 22 },
-            { key: 'taskType', width: 28 },
-            { key: 'total', width: 16 },
-            { key: 'executed', width: 16 },
-            { key: 'pending', width: 16 },
-            { key: 'compliance', width: 18 }
-        ];
-
-        // Title Block
-        summarySheet.mergeCells('A1:F1');
-        const titleCell1 = summarySheet.getCell('A1');
-        titleCell1.value = 'PETRONET MHB LIMITED\n(Mangalore Bangalore Pipeline)';
-        titleCell1.font = { name: 'Courier New', size: 14, bold: true, color: { argb: '000000' } };
-        titleCell1.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-        summarySheet.getRow(1).height = 42;
-
-        summarySheet.mergeCells('A2:F2');
-        const titleCell2 = summarySheet.getCell('A2');
-        titleCell2.value = 'Maintenance Planner Executed vs Pending Report ';
-        titleCell2.font = { name: 'Courier New', size: 12, bold: true, color: { argb: '000000' } };
-        titleCell2.alignment = { horizontal: 'center', vertical: 'middle' };
-        summarySheet.getRow(2).height = 25;
-
-        // Headers
-        const headers = ['station', 'taskType', 'total', 'executed', 'pending', 'compliance'];
-        const headerRow = summarySheet.getRow(3);
-        headerRow.height = 24;
-
-        headers.forEach((h, colIdx) => {
-            const colLetter = String.fromCharCode(65 + colIdx);
-            const cell = summarySheet.getCell(`${colLetter}3`);
-            cell.value = h;
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1F4E78' } };
-            cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFF' } };
-            cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        });
-
-        // Data Rows
-        window.currentPlannerSummary.forEach((row, idx) => {
-            const rNum = 4 + idx;
-            const rowObj = summarySheet.getRow(rNum);
-            rowObj.height = 20;
-
-            summarySheet.getCell(`A${rNum}`).value = row.station;
-            summarySheet.getCell(`B${rNum}`).value = row.taskType;
-            summarySheet.getCell(`C${rNum}`).value = String(row.total);
-            summarySheet.getCell(`D${rNum}`).value = String(row.executed);
-            summarySheet.getCell(`E${rNum}`).value = String(row.pending);
-            summarySheet.getCell(`F${rNum}`).value = String(row.compliance);
-
-            ['A', 'B', 'C', 'D', 'E', 'F'].forEach((col) => {
-                const cell = summarySheet.getCell(`${col}${rNum}`);
-                cell.font = { name: 'Calibri', size: 11, bold: false, color: { argb: '000000' } };
-                cell.alignment = { vertical: 'middle', horizontal: 'center' };
-            });
-        });
-
-        // Generate and download file
-        const buffer = await workbook.xlsx.writeBuffer();
-        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        const url = window.URL.createObjectURL(blob);
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = 'Maintenance_Planner_Executed_vs_Pending_Report.xlsx';
-        anchor.click();
-        window.URL.revokeObjectURL(url);
-    }
-
-    // --- EXCELJS FORMATTED EXPORT ENGINE FOR FILTERED DATA ---
-    async function exportFilteredExcel() {
-        if (!filteredData || filteredData.length === 0) {
-            alert("No data available to export.");
-            return;
+            document.getElementById('stat-total').innerText = total.toLocaleString();
+            document.getElementById('stat-executed').innerText = executed.toLocaleString();
+            document.getElementById('stat-pending').innerText = pending.toLocaleString();
+            document.getElementById('stat-compliance').innerText = `${compliance}%`;
         }
 
-        const workbook = new ExcelJS.Workbook();
-        workbook.creator = 'PMHBL Dashboard';
+        function applyFilters() {
+            const st = document.getElementById('filter-station').value;
+            const tp = document.getElementById('filter-tasktype').value;
+            const status = document.getElementById('filter-status').value;
 
-        // Reusable Styles
-        const HEADER_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1F4E78' } };
-        const SECTION_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'D9E1F2' } };
-        const ZEBRA_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F9FAFB' } };
-
-        const HEADER_FONT = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFF' } };
-        const SECTION_FONT = { name: 'Calibri', size: 11, bold: true, color: { argb: '1F4E78' } };
-        const BODY_FONT = { name: 'Calibri', size: 11, bold: false, color: { argb: '000000' } };
-        const TITLE_FONT = { name: 'Courier New', size: 14, bold: true, color: { argb: '1F4E78' } };
-
-        const THIN_BORDER = {
-            top: { style: 'thin', color: { argb: 'D3D3D3' } },
-            left: { style: 'thin', color: { argb: 'D3D3D3' } },
-            bottom: { style: 'thin', color: { argb: 'D3D3D3' } },
-            right: { style: 'thin', color: { argb: 'D3D3D3' } }
-        };
-
-        // --- SHEET 1: Executive Summary ---
-        const summarySheet = workbook.addWorksheet('Executive_Summary');
-        summarySheet.views = [{ showGridLines: true }];
-        summarySheet.columns = [
-            { key: 'A', width: 40 },
-            { key: 'B', width: 18 },
-            { key: 'C', width: 15 },
-            { key: 'D', width: 15 },
-            { key: 'E', width: 22 }
-        ];
-
-        // Header Title
-        summarySheet.mergeCells('A2:E2');
-        const titleCell = summarySheet.getCell('A2');
-        titleCell.value = 'PETRONET MHB LIMITED\n(Mangalore Bangalore Pipeline)';
-        titleCell.font = TITLE_FONT;
-        titleCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-        summarySheet.getRow(2).height = 42;
-
-        summarySheet.mergeCells('A3:E3');
-        const subTitleCell = summarySheet.getCell('A3');
-        subTitleCell.value = 'PMHBL MAINTENANCE EXECUTIVE COMPLIANCE REPORT';
-        subTitleCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: '595959' } };
-        subTitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-
-        // Date Metadata
-        summarySheet.getCell('A4').value = 'Generated Date';
-        summarySheet.getCell('A4').font = BODY_FONT;
-        summarySheet.getCell('B4').value = new Date().toLocaleDateString('en-US');
-        summarySheet.getCell('B4').font = BODY_FONT;
-        summarySheet.getCell('B4').alignment = { horizontal: 'center' };
-
-        // Metrics Section Header
-        summarySheet.mergeCells('A6:E6');
-        const section1 = summarySheet.getCell('A6');
-        section1.value = 'OVERALL COMPLIANCE METRICS';
-        section1.font = SECTION_FONT;
-        section1.fill = SECTION_FILL;
-        summarySheet.getRow(6).height = 24;
-        section1.alignment = { vertical: 'middle', indent: 1 };
-
-        // Metrics Table
-        const totalPlanned = filteredData.length;
-        const executed = filteredData.filter(d => d.status === 'COMPLETED').length;
-        const pending = totalPlanned - executed;
-        const compliancePercentage = totalPlanned > 0 ? (executed / totalPlanned) * 100 : 0;
-
-        summarySheet.getCell('A7').value = 'Metric Name';
-        summarySheet.getCell('B7').value = 'Value';
-        
-        const mRow = summarySheet.getRow(7);
-        mRow.height = 22;
-        ['A7', 'B7'].forEach(ref => {
-            const c = summarySheet.getCell(ref);
-            c.fill = HEADER_FILL;
-            c.font = HEADER_FONT;
-            c.alignment = { vertical: 'middle', horizontal: ref === 'A7' ? 'left' : 'center' };
-        });
-
-        const metrics = [
-            ['Total Planned Tasks', totalPlanned],
-            ['Executed Tasks', executed],
-            ['Pending Tasks', pending],
-            ['Execution Compliance', `${compliancePercentage.toFixed(2)}%`]
-        ];
-
-        metrics.forEach((m, idx) => {
-            const rowNum = 8 + idx;
-            const row = summarySheet.getRow(rowNum);
-            row.height = 20;
-
-            summarySheet.getCell(`A${rowNum}`).value = m[0];
-            summarySheet.getCell(`B${rowNum}`).value = m[1];
-
-            ['A', 'B'].forEach((col, cIdx) => {
-                const cell = summarySheet.getCell(`${col}${rowNum}`);
-                cell.font = BODY_FONT;
-                cell.border = THIN_BORDER;
-                cell.alignment = { vertical: 'middle', horizontal: cIdx === 0 ? 'left' : 'center' };
+            filteredData = rawData.filter(item => {
+                return (st === 'ALL' || item.station === st) &&
+                       (tp === 'ALL' || item.taskType === tp) &&
+                       (status === 'ALL' || item.status === status);
             });
-        });
 
-        // Yearly Breakdown Section Header
-        summarySheet.mergeCells('A13:E13');
-        const section2 = summarySheet.getCell('A13');
-        section2.value = 'YEARLY EXECUTION COMPLIANCE BREAKDOWN';
-        section2.font = SECTION_FONT;
-        section2.fill = SECTION_FILL;
-        summarySheet.getRow(13).height = 24;
-        section2.alignment = { vertical: 'middle', indent: 1 };
+            updateDashboard();
+        }
 
-        // Yearly Breakdown Table Header
-        const tableHeaders = ['Year', 'Total Planned Tasks', 'Executed Tasks', 'Pending Tasks', 'Execution Compliance'];
-        const yRow = summarySheet.getRow(14);
-        yRow.height = 22;
-        tableHeaders.forEach((h, colIdx) => {
-            const colLetter = String.fromCharCode(65 + colIdx);
-            const cell = summarySheet.getCell(`${colLetter}14`);
-            cell.value = h;
-            cell.fill = HEADER_FILL;
-            cell.font = HEADER_FONT;
-            cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        });
+        function openPlannerReport() {
+            generatePlannerReport();
+        }
 
-        // Yearly Map Aggregation
-        const yearlyMap = {};
-        filteredData.forEach(d => {
-            const yr = extractYearFromDate(d.plannedDate) || '2026';
-            if (!yearlyMap[yr]) {
-                yearlyMap[yr] = { year: yr, planned: 0, executed: 0, pending: 0 };
-            }
-            yearlyMap[yr].planned++;
-            if (d.status === 'COMPLETED') yearlyMap[yr].executed++;
-            else yearlyMap[yr].pending++;
-        });
+        function generatePlannerReport() {
+            const tbody = document.getElementById('planner-report-body');
+            tbody.innerHTML = '';
 
-        const yearlyBreakdown = Object.values(yearlyMap).sort((a, b) => a.year.localeCompare(b.year)).map(y => {
-            y.compliance = y.planned > 0 ? (y.executed / y.planned) * 100 : 0;
-            return y;
-        });
+            const stations = ['Mangalore', 'Neriya', 'Hassan', 'DKN'];
+            const types = ['Preventive Maintenance', 'Calibration'];
+            const summaryRows = [];
 
-        yearlyBreakdown.forEach((row, idx) => {
-            const rNum = 15 + idx;
-            const rowObj = summarySheet.getRow(rNum);
-            rowObj.height = 20;
+            stations.forEach(st => {
+                types.forEach(tp => {
+                    const subset = filteredData.filter(d => d.station === st && d.taskType === tp);
+                    const total = subset.length;
+                    const executed = subset.filter(d => d.status === 'COMPLETED').length;
+                    const pending = total - executed;
+                    const compliance = total > 0 ? ((executed / total) * 100).toFixed(1) : '0.0';
 
-            summarySheet.getCell(`A${rNum}`).value = row.year;
-            summarySheet.getCell(`B${rNum}`).value = row.planned;
-            summarySheet.getCell(`C${rNum}`).value = row.executed;
-            summarySheet.getCell(`D${rNum}`).value = row.pending;
-            summarySheet.getCell(`E${rNum}`).value = `${row.compliance.toFixed(2)}%`;
-
-            ['A', 'B', 'C', 'D', 'E'].forEach((c) => {
-                const cell = summarySheet.getCell(`${c}${rNum}`);
-                cell.font = BODY_FONT;
-                cell.border = THIN_BORDER;
-                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                    if (total > 0) {
+                        summaryRows.push({ station: st, taskType: tp, total, executed, pending, compliance });
+                        
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td class="p-2 border font-bold">${st}</td>
+                            <td class="p-2 border">${tp}</td>
+                            <td class="p-2 border text-center font-bold">${total}</td>
+                            <td class="p-2 border text-center text-emerald-600 font-bold">${executed}</td>
+                            <td class="p-2 border text-center text-amber-600 font-bold">${pending}</td>
+                            <td class="p-2 border text-center font-bold ${compliance >= 90 ? 'text-emerald-600' : 'text-rose-600'}">${compliance}%</td>
+                        `;
+                        tbody.appendChild(tr);
+                    }
+                });
             });
-        });
 
-        // --- SHEET 2: Task Master Log ---
-        const logSheet = workbook.addWorksheet('Task_Master_Log');
-        logSheet.views = [{ showGridLines: true }];
-        logSheet.columns = [
-            { key: 'order', width: 14 },
-            { key: 'station', width: 14 },
-            { key: 'description', width: 45 },
-            { key: 'activity', width: 24 },
-            { key: 'scheduledDate', width: 16 },
-            { key: 'completionDate', width: 16 },
-            { key: 'status', width: 15 }
-        ];
+            window.currentPlannerSummary = summaryRows;
+            document.getElementById('planner-modal').classList.remove('hidden');
+        }
 
-        logSheet.mergeCells('A2:G2');
-        const logTitleCell = logSheet.getCell('A2');
-        logTitleCell.value = 'PETRONET MHB LIMITED\n(Mangalore Bangalore Pipeline)';
-        logTitleCell.font = TITLE_FONT;
-        logTitleCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-        logSheet.getRow(2).height = 45;
+        function closePlannerReport() {
+            document.getElementById('planner-modal').classList.add('hidden');
+        }
 
-        logSheet.mergeCells('A3:G3');
-        const logSubTitleCell = logSheet.getCell('A3');
-        logSubTitleCell.value = 'SAP Maintenance Master Log Report';
-        logSubTitleCell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: '595959' } };
-        logSubTitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        function exportPlannerSummaryExcel() {
+            if (!window.currentPlannerSummary || window.currentPlannerSummary.length === 0) return;
 
-        const logHeaders = ['Order No', 'Station', 'Equipment Description', 'Activity Type', 'Scheduled Date', 'Completion Date', 'Status'];
-        const logHeaderRow = logSheet.getRow(4);
-        logHeaderRow.height = 25;
-        logHeaders.forEach((headerText, i) => {
-            const colLetter = String.fromCharCode(65 + i);
-            const cell = logSheet.getCell(`${colLetter}4`);
-            cell.value = headerText;
-            cell.fill = HEADER_FILL;
-            cell.font = HEADER_FONT;
-            cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        });
+            const wb = XLSX.utils.book_new();
+            const ws = {};
 
-        filteredData.forEach((task, idx) => {
-            const rNum = 5 + idx;
-            const row = logSheet.getRow(rNum);
-            row.height = 20;
-            const isEven = idx % 2 === 0;
+            ws['!cols'] = [
+                { wch: 16 },
+                { wch: 26 },
+                { wch: 14 },
+                { wch: 14 },
+                { wch: 14 },
+                { wch: 15 }
+            ];
 
-            const schedFormatted = parseSapDate(task.plannedDate) || '-';
-            const compFormatted = parseSapDate(task.actualDoneDate) || 'Pending';
+            ws['!merges'] = [
+                { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
+                { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } }
+            ];
 
-            logSheet.getCell(`A${rNum}`).value = String(task.orderNo || '');
-            logSheet.getCell(`B${rNum}`).value = task.station || '';
-            logSheet.getCell(`C${rNum}`).value = task.equipment || '';
-            logSheet.getCell(`D${rNum}`).value = task.taskType || '';
-            logSheet.getCell(`E${rNum}`).value = schedFormatted;
-            logSheet.getCell(`F${rNum}`).value = compFormatted;
-            logSheet.getCell(`G${rNum}`).value = task.status || 'PENDING';
+            const titleStyle = {
+                font: { name: 'Courier New', sz: 14, bold: true, color: { rgb: '1F4E78' } },
+                alignment: { horizontal: 'center', vertical: 'center', wrapText: true }
+            };
 
-            ['A', 'B', 'C', 'D', 'E', 'F', 'G'].forEach((col, colIdx) => {
-                const cell = logSheet.getCell(`${col}${rNum}`);
-                cell.font = BODY_FONT;
-                cell.border = THIN_BORDER;
-                cell.alignment = { vertical: 'middle' };
-
-                if (isEven) {
-                    cell.fill = ZEBRA_FILL;
+            const headerStyle = {
+                font: { name: 'Calibri', sz: 11, bold: true, color: { rgb: 'FFFFFF' } },
+                fill: { fgColor: { rgb: '1F4E78' } },
+                alignment: { horizontal: 'center', vertical: 'center' },
+                border: {
+                    top: { style: 'medium' },
+                    bottom: { style: 'medium' },
+                    left: { style: 'thin' },
+                    right: { style: 'thin' }
                 }
+            };
 
-                // Align dates, status, order numbers & stations in center
-                if ([0, 1, 3, 4, 5, 6].includes(colIdx)) {
-                    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            const dataStyle = {
+                font: { name: 'Calibri', sz: 12 },
+                alignment: { horizontal: 'center', vertical: 'center' },
+                border: {
+                    top: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    left: { style: 'thin' },
+                    right: { style: 'thin' }
                 }
+            };
+
+            ws['A1'] = { v: 'PETRONET MHB LIMITED\n(Mangalore Bangalore Pipeline)', s: titleStyle };
+            ws['A2'] = { v: 'Maintenance Planner Executed vs Pending Report ', s: titleStyle };
+
+            for (let r = 0; r < 2; r++) {
+                for (let c = 0; c < 6; c++) {
+                    const cellRef = XLSX.utils.encode_cell({ r, c });
+                    if (!ws[cellRef]) {
+                        ws[cellRef] = { v: '', s: titleStyle };
+                    }
+                }
+            }
+
+            const headers = ['station', 'taskType', 'total', 'executed', 'pending', 'compliance'];
+            headers.forEach((h, c) => {
+                const cellRef = XLSX.utils.encode_cell({ r: 2, c });
+                ws[cellRef] = { v: h, s: headerStyle };
             });
 
-            // Dynamic Status Highlighting
-            const statusCell = logSheet.getCell(`G${rNum}`);
-            if (task.status === 'COMPLETED') {
-                statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'E2EFDA' } }; // Soft Green
-                statusCell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: '375623' } };
-            } else {
-                statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FCE4D6' } }; // Soft Red/Orange
-                statusCell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'C65911' } };
-            }
-        });
+            window.currentPlannerSummary.forEach((row, rIndex) => {
+                const r = rIndex + 3;
+                const rowValues = [
+                    row.station,
+                    row.taskType,
+                    Number(row.total),
+                    Number(row.executed),
+                    Number(row.pending),
+                    row.compliance.toString()
+                ];
 
-        // Download Excel File
-        const buffer = await workbook.xlsx.writeBuffer();
-        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        const url = window.URL.createObjectURL(blob);
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = 'PMHBL_Filtered_Maintenance_Report.xlsx';
-        anchor.click();
-        window.URL.revokeObjectURL(url);
-    }
+                rowValues.forEach((val, c) => {
+                    const cellRef = XLSX.utils.encode_cell({ r, c });
+                    ws[cellRef] = {
+                        v: val,
+                        t: typeof val === 'number' ? 'n' : 's',
+                        s: dataStyle
+                    };
+                });
+            });
+
+            const totalRows = window.currentPlannerSummary.length + 3;
+            ws['!ref'] = XLSX.utils.encode_range({
+                s: { r: 0, c: 0 },
+                e: { r: totalRows - 1, c: 5 }
+            });
+
+            XLSX.utils.book_append_sheet(wb, ws, 'Planner_Summary');
+            XLSX.writeFile(wb, 'Maintenance_Planner_Executed_vs_Pending_Report.xlsx');
+        }
+
+        function exportFilteredExcel() {
+            if (!filteredData || filteredData.length === 0) return;
+            
+            // Format dates before exporting to Excel
+            const exportData = filteredData.map(item => ({
+                ...item,
+                plannedDate: formatDateToDDMMYYYY(item.plannedDate)
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Filtered_Data");
+            XLSX.writeFile(wb, "Filtered_Maintenance_Report.xlsx");
+        }
     </script>
-
-    <!-- Google Identity Services SDK -->
-    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 </body>
 </html>
