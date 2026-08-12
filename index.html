@@ -7,6 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- ExcelJS library for styled Excel exports -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 </head>
 <body class="bg-slate-100 font-sans text-slate-800 min-h-screen flex flex-col">
 
@@ -240,7 +242,6 @@
     <script>
     const ALLOWED_EMAILS = [
         'pmhblmaintenance@gmail.com',
-        
     ];
 
     function isEmailApproved(email) {
@@ -774,74 +775,264 @@
         XLSX.writeFile(wb, "Maintenance_Planner_Executed_vs_Pending_Report.xlsx");
     }
 
-    function exportFilteredExcel() {
-        const totalPlanned = filteredData.length;
-        const executedTasks = filteredData.filter(d => d.status === 'COMPLETED').length;
-        const pendingTasks = totalPlanned - executedTasks;
-        const overallCompliance = totalPlanned > 0 ? ((executedTasks / totalPlanned) * 100).toFixed(2) + '%' : '0.00%';
+    // --- EXCELJS FORMATTED EXPORT ENGINE ---
+    async function exportFilteredExcel() {
+        if (!filteredData || filteredData.length === 0) {
+            alert("No data available to export.");
+            return;
+        }
 
-        const yearlyStatsMap = {};
-        filteredData.forEach(item => {
-            const yr = extractYearFromDate(item.plannedDate) || 'Unknown Year';
-            if (!yearlyStatsMap[yr]) {
-                yearlyStatsMap[yr] = { total: 0, executed: 0, pending: 0 };
-            }
-            yearlyStatsMap[yr].total += 1;
-            if (item.status === 'COMPLETED') {
-                yearlyStatsMap[yr].executed += 1;
-            } else {
-                yearlyStatsMap[yr].pending += 1;
-            }
-        });
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'PMHBL Dashboard';
 
-        const yearlyRows = Object.keys(yearlyStatsMap).sort().map(yr => {
-            const t = yearlyStatsMap[yr].total;
-            const e = yearlyStatsMap[yr].executed;
-            const p = yearlyStatsMap[yr].pending;
-            const c = t > 0 ? ((e / t) * 100).toFixed(2) + '%' : '0.00%';
-            return {
-                "Year": yr,
-                "Total Planned Tasks": t,
-                "Executed Tasks": e,
-                "Pending Tasks": p,
-                "Execution Compliance": c
-            };
-        });
+        // Reusable Styles
+        const HEADER_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1F4E78' } };
+        const SECTION_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'D9E1F2' } };
+        const ZEBRA_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F9FAFB' } };
 
-        const summarySheetData = [
-            ["PMHBL MAINTENANCE EXECUTIVE COMPLIANCE REPORT"],
-            ["Generated Date", new Date().toLocaleDateString()],
-            [],
-            ["OVERALL COMPLIANCE METRICS"],
-            ["Metric Name", "Value"],
-            ["Total Planned Tasks", totalPlanned],
-            ["Executed Tasks", executedTasks],
-            ["Pending Tasks", pendingTasks],
-            ["Execution Compliance", overallCompliance],
-            [],
-            ["YEARLY EXECUTION COMPLIANCE BREAKDOWN"]
+        const HEADER_FONT = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFF' } };
+        const SECTION_FONT = { name: 'Calibri', size: 11, bold: true, color: { argb: '1F4E78' } };
+        const BODY_FONT = { name: 'Calibri', size: 11, bold: false, color: { argb: '000000' } };
+        const TITLE_FONT = { name: 'Courier New', size: 14, bold: true, color: { argb: '1F4E78' } };
+
+        const THIN_BORDER = {
+            top: { style: 'thin', color: { argb: 'D3D3D3' } },
+            left: { style: 'thin', color: { argb: 'D3D3D3' } },
+            bottom: { style: 'thin', color: { argb: 'D3D3D3' } },
+            right: { style: 'thin', color: { argb: 'D3D3D3' } }
+        };
+
+        // --- SHEET 1: Executive Summary ---
+        const summarySheet = workbook.addWorksheet('Executive_Summary');
+        summarySheet.views = [{ showGridLines: true }];
+        summarySheet.columns = [
+            { key: 'A', width: 40 },
+            { key: 'B', width: 18 },
+            { key: 'C', width: 15 },
+            { key: 'D', width: 15 },
+            { key: 'E', width: 22 }
         ];
 
-        const summaryWs = XLSX.utils.aoa_to_sheet(summarySheetData);
-        XLSX.utils.sheet_add_json(summaryWs, yearlyRows, { origin: "A12" });
+        // Header Title
+        summarySheet.mergeCells('A2:E2');
+        const titleCell = summarySheet.getCell('A2');
+        titleCell.value = 'PETRONET MHB LIMITED\n(Mangalore Bangalore Pipeline)';
+        titleCell.font = TITLE_FONT;
+        titleCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        summarySheet.getRow(2).height = 42;
 
-        const taskExportData = filteredData.map(item => ({
-            "Order No": item.orderNo,
-            "Station": item.station,
-            "Equipment Description": item.equipment,
-            "Activity Type": item.taskType,
-            "Scheduled Date": parseSapDate(item.plannedDate) || '-',
-            "Completion Date": parseSapDate(item.actualDoneDate) || 'Pending',
-            "Status": item.status
-        }));
+        summarySheet.mergeCells('A3:E3');
+        const subTitleCell = summarySheet.getCell('A3');
+        subTitleCell.value = 'PMHBL MAINTENANCE EXECUTIVE COMPLIANCE REPORT';
+        subTitleCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: '595959' } };
+        subTitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-        const tasksWs = XLSX.utils.json_to_sheet(taskExportData);
+        // Date Metadata
+        summarySheet.getCell('A4').value = 'Generated Date';
+        summarySheet.getCell('A4').font = BODY_FONT;
+        summarySheet.getCell('B4').value = new Date().toLocaleDateString('en-US');
+        summarySheet.getCell('B4').font = BODY_FONT;
+        summarySheet.getCell('B4').alignment = { horizontal: 'center' };
 
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, summaryWs, "Executive_Summary");
-        XLSX.utils.book_append_sheet(wb, tasksWs, "Task_Master_Log");
+        // Metrics Section Header
+        summarySheet.mergeCells('A6:E6');
+        const section1 = summarySheet.getCell('A6');
+        section1.value = 'OVERALL COMPLIANCE METRICS';
+        section1.font = SECTION_FONT;
+        section1.fill = SECTION_FILL;
+        summarySheet.getRow(6).height = 24;
+        section1.alignment = { vertical: 'middle', indent: 1 };
 
-        XLSX.writeFile(wb, "PMHBL_Filtered_Maintenance_Report.xlsx");
+        // Metrics Table
+        const totalPlanned = filteredData.length;
+        const executed = filteredData.filter(d => d.status === 'COMPLETED').length;
+        const pending = totalPlanned - executed;
+        const compliancePercentage = totalPlanned > 0 ? (executed / totalPlanned) * 100 : 0;
+
+        summarySheet.getCell('A7').value = 'Metric Name';
+        summarySheet.getCell('B7').value = 'Value';
+        
+        const mRow = summarySheet.getRow(7);
+        mRow.height = 22;
+        ['A7', 'B7'].forEach(ref => {
+            const c = summarySheet.getCell(ref);
+            c.fill = HEADER_FILL;
+            c.font = HEADER_FONT;
+            c.alignment = { vertical: 'middle', horizontal: ref === 'A7' ? 'left' : 'center' };
+        });
+
+        const metrics = [
+            ['Total Planned Tasks', totalPlanned],
+            ['Executed Tasks', executed],
+            ['Pending Tasks', pending],
+            ['Execution Compliance', `${compliancePercentage.toFixed(2)}%`]
+        ];
+
+        metrics.forEach((m, idx) => {
+            const rowNum = 8 + idx;
+            const row = summarySheet.getRow(rowNum);
+            row.height = 20;
+
+            summarySheet.getCell(`A${rowNum}`).value = m[0];
+            summarySheet.getCell(`B${rowNum}`).value = m[1];
+
+            ['A', 'B'].forEach((col, cIdx) => {
+                const cell = summarySheet.getCell(`${col}${rowNum}`);
+                cell.font = BODY_FONT;
+                cell.border = THIN_BORDER;
+                cell.alignment = { vertical: 'middle', horizontal: cIdx === 0 ? 'left' : 'center' };
+            });
+        });
+
+        // Yearly Breakdown Section Header
+        summarySheet.mergeCells('A13:E13');
+        const section2 = summarySheet.getCell('A13');
+        section2.value = 'YEARLY EXECUTION COMPLIANCE BREAKDOWN';
+        section2.font = SECTION_FONT;
+        section2.fill = SECTION_FILL;
+        summarySheet.getRow(13).height = 24;
+        section2.alignment = { vertical: 'middle', indent: 1 };
+
+        // Yearly Breakdown Table Header
+        const tableHeaders = ['Year', 'Total Planned Tasks', 'Executed Tasks', 'Pending Tasks', 'Execution Compliance'];
+        const yRow = summarySheet.getRow(14);
+        yRow.height = 22;
+        tableHeaders.forEach((h, colIdx) => {
+            const colLetter = String.fromCharCode(65 + colIdx);
+            const cell = summarySheet.getCell(`${colLetter}14`);
+            cell.value = h;
+            cell.fill = HEADER_FILL;
+            cell.font = HEADER_FONT;
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
+
+        // Yearly Map Aggregation
+        const yearlyMap = {};
+        filteredData.forEach(d => {
+            const yr = extractYearFromDate(d.plannedDate) || '2026';
+            if (!yearlyMap[yr]) {
+                yearlyMap[yr] = { year: yr, planned: 0, executed: 0, pending: 0 };
+            }
+            yearlyMap[yr].planned++;
+            if (d.status === 'COMPLETED') yearlyMap[yr].executed++;
+            else yearlyMap[yr].pending++;
+        });
+
+        const yearlyBreakdown = Object.values(yearlyMap).sort((a, b) => a.year.localeCompare(b.year)).map(y => {
+            y.compliance = y.planned > 0 ? (y.executed / y.planned) * 100 : 0;
+            return y;
+        });
+
+        yearlyBreakdown.forEach((row, idx) => {
+            const rNum = 15 + idx;
+            const rowObj = summarySheet.getRow(rNum);
+            rowObj.height = 20;
+
+            summarySheet.getCell(`A${rNum}`).value = row.year;
+            summarySheet.getCell(`B${rNum}`).value = row.planned;
+            summarySheet.getCell(`C${rNum}`).value = row.executed;
+            summarySheet.getCell(`D${rNum}`).value = row.pending;
+            summarySheet.getCell(`E${rNum}`).value = `${row.compliance.toFixed(2)}%`;
+
+            ['A', 'B', 'C', 'D', 'E'].forEach((c) => {
+                const cell = summarySheet.getCell(`${c}${rNum}`);
+                cell.font = BODY_FONT;
+                cell.border = THIN_BORDER;
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            });
+        });
+
+        // --- SHEET 2: Task Master Log ---
+        const logSheet = workbook.addWorksheet('Task_Master_Log');
+        logSheet.views = [{ showGridLines: true }];
+        logSheet.columns = [
+            { key: 'order', width: 14 },
+            { key: 'station', width: 14 },
+            { key: 'description', width: 45 },
+            { key: 'activity', width: 24 },
+            { key: 'scheduledDate', width: 16 },
+            { key: 'completionDate', width: 16 },
+            { key: 'status', width: 15 }
+        ];
+
+        logSheet.mergeCells('A2:G2');
+        const logTitleCell = logSheet.getCell('A2');
+        logTitleCell.value = 'PETRONET MHB LIMITED\n(Mangalore Bangalore Pipeline)';
+        logTitleCell.font = TITLE_FONT;
+        logTitleCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        logSheet.getRow(2).height = 45;
+
+        logSheet.mergeCells('A3:G3');
+        const logSubTitleCell = logSheet.getCell('A3');
+        logSubTitleCell.value = 'SAP Maintenance Master Log Report';
+        logSubTitleCell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: '595959' } };
+        logSubTitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+        const logHeaders = ['Order No', 'Station', 'Equipment Description', 'Activity Type', 'Scheduled Date', 'Completion Date', 'Status'];
+        const logHeaderRow = logSheet.getRow(4);
+        logHeaderRow.height = 25;
+        logHeaders.forEach((headerText, i) => {
+            const colLetter = String.fromCharCode(65 + i);
+            const cell = logSheet.getCell(`${colLetter}4`);
+            cell.value = headerText;
+            cell.fill = HEADER_FILL;
+            cell.font = HEADER_FONT;
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
+
+        filteredData.forEach((task, idx) => {
+            const rNum = 5 + idx;
+            const row = logSheet.getRow(rNum);
+            row.height = 20;
+            const isEven = idx % 2 === 0;
+
+            const schedFormatted = parseSapDate(task.plannedDate) || '-';
+            const compFormatted = parseSapDate(task.actualDoneDate) || 'Pending';
+
+            logSheet.getCell(`A${rNum}`).value = String(task.orderNo || '');
+            logSheet.getCell(`B${rNum}`).value = task.station || '';
+            logSheet.getCell(`C${rNum}`).value = task.equipment || '';
+            logSheet.getCell(`D${rNum}`).value = task.taskType || '';
+            logSheet.getCell(`E${rNum}`).value = schedFormatted;
+            logSheet.getCell(`F${rNum}`).value = compFormatted;
+            logSheet.getCell(`G${rNum}`).value = task.status || 'PENDING';
+
+            ['A', 'B', 'C', 'D', 'E', 'F', 'G'].forEach((col, colIdx) => {
+                const cell = logSheet.getCell(`${col}${rNum}`);
+                cell.font = BODY_FONT;
+                cell.border = THIN_BORDER;
+                cell.alignment = { vertical: 'middle' };
+
+                if (isEven) {
+                    cell.fill = ZEBRA_FILL;
+                }
+
+                // Align dates, status, order numbers & stations in center
+                if ([0, 1, 3, 4, 5, 6].includes(colIdx)) {
+                    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                }
+            });
+
+            // Dynamic Status Highlighting
+            const statusCell = logSheet.getCell(`G${rNum}`);
+            if (task.status === 'COMPLETED') {
+                statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'E2EFDA' } }; // Soft Green
+                statusCell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: '375623' } };
+            } else {
+                statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FCE4D6' } }; // Soft Red/Orange
+                statusCell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'C65911' } };
+            }
+        });
+
+        // Download Excel File
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = window.URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = 'PMHBL_Filtered_Maintenance_Report.xlsx';
+        anchor.click();
+        window.URL.revokeObjectURL(url);
     }
     </script>
 
